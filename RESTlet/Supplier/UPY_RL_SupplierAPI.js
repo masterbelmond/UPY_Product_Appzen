@@ -55,7 +55,7 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime'],
             var _data = [];
             var suppliersArr = [];
             var addressArr = [];
-            var contactArr = [];
+            var contactArr = [];columns
 
             //region SUPPLIER SEARCH
             var searchSupplier = search.load({

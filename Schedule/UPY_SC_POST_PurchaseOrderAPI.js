@@ -1,17 +1,14 @@
 /**
  * @NApiVersion 2.x
- * @NScriptType Restlet
+ * @NScriptType ScheduledScript
  * @NModuleScope SameAccount
  */
 
-define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_library.js'],
+define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/file', 'N/http', 'N/https', './Appzen_Integration_library.js'],
 
-    function(log, record, search, runtime) {
+    function (record, search, log, email, runtime, error, file, http, https) {
 
-        function doPost(){
-        }
-
-        function doGet(requestParams) {
+        function execute() {
 
             //region COMPANY PREFERENCES
             var scriptObj = runtime.getCurrentScript();
@@ -31,8 +28,8 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
             //endregion COMPANY PREFERENCES
 
             //region USER PREFERENCES
-            var paramSupplierLogs = scriptObj.getParameter({
-                name: 'custscript_appzen_supplier_logs'
+            var IS_LOG_ON = scriptObj.getParameter({
+                name: 'custscript_appzen_sc_purch_ord_logs'
             });
             //endregion USER PREFERENCES
 
@@ -43,12 +40,10 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
             var ENDPOINT = URI + TYPE + NETSUITE_CUSTOMER_ID;
             //endregion GLOBAL VAR
 
-            /**
-             log.debug({
+            log.debug({
                 title : 'PARAMETERS',
-                details : 'ENDPOINT : ' + ENDPOINT + ' | Base URI: ' + paramBaseURI + ' | Supplier Endpoint: ' + paramSupplierEndpoint + ' | Search: ' + paramSupplierSearch
+                details : 'ENDPOINT : ' + ENDPOINT + ' | Base URI: ' + paramBaseURI + ' | Purchase Order Endpoint: ' + paramPurchaseOrderEndpoint + ' | Search: ' + paramPurchaseOrderSearch + ' | Capture Logs: ' + IS_LOG_ON
             });
-             **/
 
             //region POST DATA
             var postData = {};
@@ -260,14 +255,43 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
 
             postData = purchaseOrderArr;
 
-            return postData;
-
             //endregion POST DATA
+
+            var appzenResponse = https.post({
+                url : ENDPOINT,
+                body : postData
+            });
+
+            var code = appzenResponse.code;
+            var body = JSON.stringify(appzenResponse.body);
+
+            log.debug({
+                title : 'Appzen Response Code',
+                details : 'Code: ' + code
+            });
+
+            log.debug({
+                title : 'Appzen Response Body',
+                details : body
+            });
+
+            if(IS_LOG_ON) {
+
+                var _log = {
+                    'datetime' : new Date(),
+                    'request' : postData,
+                    'response' : body,
+                    'url' : ENDPOINT,
+                    'code' : code,
+                    'record_type' : RECORD_TYPE_LIST.VENDOR
+                };
+
+                generateLog(record, _log);
+            }
         }
 
         return {
-            get : doGet,
-            post : doPost
+            execute: execute
         };
     }
 );

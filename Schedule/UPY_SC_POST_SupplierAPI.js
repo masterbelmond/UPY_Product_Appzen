@@ -4,13 +4,14 @@
  * @NModuleScope SameAccount
  */
 
-define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/file', 'N/http', 'N/https', './Appzen_Integration_library.js'],
+define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/file', 'N/http', 'N/https', 'N/keyControl', 'N/sftp', './Appzen_Integration_library.js'],
 
-    function (record, search, log, email, runtime, error, file, http, https) {
-    
+    function (record, search, log, email, runtime, error, file, http, https, keyControl, sftp) {
+
         function execute() {
 
             //region COMPANY PREFERENCES
+
             var scriptObj = runtime.getCurrentScript();
 
             var paramBaseURI = scriptObj.getParameter({
@@ -25,6 +26,24 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             var paramAppzenCustomerID = scriptObj.getParameter({
                 name: 'custscript_appzen_customer_id'
             });
+            var paramAppzenSFTP_URL = scriptObj.getParameter({
+                name: 'custscript_appzen_sftp_url'
+            });
+            var paramAppzenSFTP_username = scriptObj.getParameter({
+                name: 'custscript_appzen_sftp_username'
+            });
+            var paramAppzenSFTP_dir = scriptObj.getParameter({
+                name: 'custscript_appzen_sftp_root_dir'
+            });
+            var paramAppzenSFTP_integration_folder = scriptObj.getParameter({
+                name: 'custscript_appzen_integration_folder_id'
+            });
+
+            log.debug({
+                title : 'COMPANY PREFERENCES',
+                details : 'Base URI: ' + paramBaseURI + ' | Supplier Endpoint: ' + paramSupplierEndpoint + ' | Supplier Search: ' + paramSupplierSearch + ' | Customer ID: ' + paramAppzenCustomerID + ' | SFTP URL: ' + paramAppzenSFTP_URL + ' SFTP username: ' + paramAppzenSFTP_username + ' | SFTP dir: ' + paramAppzenSFTP_dir + ' | Integration folder: ' + paramAppzenSFTP_integration_folder
+            });
+
             //endregion COMPANY PREFERENCES
 
             //region USER PREFERENCES
@@ -40,11 +59,8 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             var ENDPOINT = URI + TYPE + NETSUITE_CUSTOMER_ID;
             //endregion GLOBAL VAR
 
-             log.debug({
-                title : 'PARAMETERS',
-                details : 'ENDPOINT : ' + ENDPOINT + ' | Base URI: ' + paramBaseURI + ' | Supplier Endpoint: ' + paramSupplierEndpoint + ' | Search: ' + paramSupplierSearch + ' | Capture Logs' + IS_LOG_ON
-            });
 
+            //region POST DATA
             var postData = {};
 
             var _data = [];
@@ -313,15 +329,59 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             var code = appzenResponse.code;
             var body = JSON.stringify(appzenResponse.body);
 
-            log.debug({
-                title : 'Appzen Response Code',
-                details : 'Code: ' + code
-            });
+            //endregion POST DATA
 
-            log.debug({
-                title : 'Appzen Response Body',
-                details : body
-            });
+            //region FILE
+
+            var fileName = 'SUPPLIER_' + timeStamp() + '.json';
+            var contents = JSON.stringify(postData);
+            var fileId = createFile(fileName, contents, paramAppzenSFTP_integration_folder);
+
+            //endregion FILE
+
+            //region SFTP
+            if(!isBlank(fileId)){
+
+                var myConn = '';
+
+                var HOST_KEY_TOOL_URL = 'https://ursuscode.com/tools/sshkeyscan.php?url=';
+                var url = paramAppzenSFTP_URL;
+                var port = '';
+                var hostKeyType = '';
+                var myUrl = HOST_KEY_TOOL_URL + url + "&port=" + port + "&type=" + hostKeyType;
+
+                var tempHostKey = https.get({url: myUrl}).body;
+                var hostKey = tempHostKey.replace(paramAppzenSFTP_URL + ' ssh-rsa ', '');
+
+                log.debug({
+                    title : 'HostKey',
+                    details : tempHostKey
+                })
+
+                var keyControlModule = keyControl.loadKey({
+                    scriptId: 'custkey_appzen_sftp'
+                });
+
+                if(!isBlank(hostKey)){
+                    myConn = createSftpConnection(paramAppzenSFTP_username, paramAppzenSFTP_URL, hostKey, keyControlModule.scriptId);
+                }
+
+                if(!isBlank(myConn)) {
+
+                    var loadFile = file.load({
+                        id : fileId
+                    });
+
+                    myConn.upload({
+                        directory: paramAppzenSFTP_dir,
+                        filename: fileName,
+                        file: loadFile,
+                        replaceExisting: true
+                    });
+                }
+
+            }
+            //endregion SFTP
 
             if(IS_LOG_ON) {
 
@@ -336,8 +396,21 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                 generateLog(record, _log);
             }
+
         }
 
+        function createFile(fileName, contents, folder) {
+            var fileObj = file.create({
+                name: fileName,
+                fileType: file.Type.PLAINTEXT,
+                contents: contents,
+                folder : folder
+            });
+
+            var id = fileObj.save();
+            return id;
+        }
+        
         return {
             execute: execute
         };
