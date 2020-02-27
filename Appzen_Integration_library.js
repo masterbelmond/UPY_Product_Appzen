@@ -1,6 +1,93 @@
 //region FUNCTIONS
 
-function createSftpConnection(user, url, hostKey, keyId){
+function getAttachments(search) {
+
+    var fileArr = [];
+
+    var transactionSearchObj = search.create({
+        type: 'transaction',
+        filters:
+            [
+                ['type','anyof','VendBill','VendCred','PurchOrd'],
+                'AND',
+                ['file.internalid','noneof','@NONE@']
+            ],
+        columns:
+            [
+                search.createColumn({
+                    name: 'internalid',
+                    summary: 'GROUP',
+                    label: 'Internal ID'
+                }),
+                search.createColumn({
+                    name: 'type',
+                    summary: 'GROUP',
+                    label: 'Type'
+                }),
+                search.createColumn({
+                    name: 'internalid',
+                    join: 'file',
+                    summary: 'GROUP',
+                    label: 'Internal ID'
+                })
+            ]
+    });
+    var searchResultCount = transactionSearchObj.runPaged().count;
+    transactionSearchObj.run().each(function(result){
+        // .run().each has a limit of 4,000 results
+
+        var transactionId = result.getValue({
+            name: 'internalid',
+            summary: 'GROUP'
+        });
+
+        var transactionType = result.getValue({
+            name: 'type',
+            summary: 'GROUP'
+        });
+
+        var fileId = result.getValue({
+            name: 'internalid',
+            join: 'file',
+            summary: 'GROUP'
+        });
+
+        fileArr.push({
+            'transactionId' : transactionId,
+            'transactionType' : transactionType,
+            'fileId' : fileId
+        });
+
+        return true;
+    });
+
+    return fileArr;
+}
+
+function getTransactionAttachments(json, transactionId) {
+
+    var attachments = [];
+    for(var i in json){
+        if(transactionId == json[i].transactionId){
+            attachments.push(json[i].fileId);
+        }
+    }
+    return attachments;
+}
+
+function createFile(file, fileName, contents, folder) {
+    var fileObj = file.create({
+        name: fileName,
+        fileType: file.Type.PLAINTEXT,
+        contents: contents,
+        folder : folder
+    });
+
+    var id = fileObj.save();
+    return id;
+}
+
+function createSftpConnection(sftp, user, url, hostKey, keyId){
     // establish connection to remote FTP server
     var connection = sftp.createConnection({
         username: user,
@@ -60,6 +147,10 @@ function findFromArray(array,key,value) {
 
 function generateLog(record, _log){
 
+    var req = _log.request;
+
+    var request = req.slice(0, 999);
+
     var logs = record.create({
         type: 'customrecord_appzen_integration_logs',
         isDynamic: true
@@ -72,7 +163,7 @@ function generateLog(record, _log){
 
     logs.setValue({
         fieldId: 'custrecord_appzen_request',
-        value: JSON.stringify(_log.request)
+        value: request
     });
 
     logs.setValue({
@@ -119,6 +210,7 @@ function isBlank(test) {
 //endregion FUNCTIONS
 
 //region LIST
+
 
 var RECORD_TYPE_LIST = {
     'VENDOR' : '-3',

@@ -4,9 +4,9 @@
  * @NModuleScope SameAccount
  */
 
-define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/file', 'N/http', 'N/https', './Appzen_Integration_library.js'],
+define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/file', 'N/http', 'N/https', 'N/keyControl', 'N/sftp', './Appzen_Integration_library.js'],
 
-    function (record, search, log, email, runtime, error, file, http, https) {
+    function (record, search, log, email, runtime, error, file, http, https, keyControl, sftp) {
 
         function execute() {
 
@@ -25,6 +25,20 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             var paramPurchaseOrderSearch = scriptObj.getParameter({
                 name: 'custscript_appzen_purch_ord_search'
             });
+
+            var paramAppzenSFTP_URL = scriptObj.getParameter({
+                name: 'custscript_appzen_sftp_url'
+            });
+            var paramAppzenSFTP_username = scriptObj.getParameter({
+                name: 'custscript_appzen_sftp_username'
+            });
+            var paramAppzenSFTP_dir = scriptObj.getParameter({
+                name: 'custscript_appzen_sftp_root_dir'
+            });
+            var paramAppzenSFTP_integration_folder = scriptObj.getParameter({
+                name: 'custscript_appzen_integration_folder_id'
+            });
+
             //endregion COMPANY PREFERENCES
 
             //region USER PREFERENCES
@@ -265,15 +279,57 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             var code = appzenResponse.code;
             var body = JSON.stringify(appzenResponse.body);
 
-            log.debug({
-                title : 'Appzen Response Code',
-                details : 'Code: ' + code
-            });
+            //region FILE
 
-            log.debug({
-                title : 'Appzen Response Body',
-                details : body
-            });
+            var fileName = 'PURCHASE_ORDER_' + timeStamp() + '.json';
+            var contents = JSON.stringify(postData);
+            var fileId = createFile(file, fileName, contents, paramAppzenSFTP_integration_folder);
+
+            //endregion FILE
+
+            //region SFTP
+            if(!isBlank(fileId)){
+
+                var myConn = '';
+
+                var HOST_KEY_TOOL_URL = 'https://ursuscode.com/tools/sshkeyscan.php?url=';
+                var url = paramAppzenSFTP_URL;
+                var port = '';
+                var hostKeyType = '';
+                var myUrl = HOST_KEY_TOOL_URL + url + "&port=" + port + "&type=" + hostKeyType;
+
+                var tempHostKey = https.get({url: myUrl}).body;
+                var hostKey = tempHostKey.replace(paramAppzenSFTP_URL + ' ssh-rsa ', '');
+
+                log.debug({
+                    title : 'HostKey',
+                    details : tempHostKey
+                })
+
+                var keyControlModule = keyControl.loadKey({
+                    scriptId: 'custkey_appzen_sftp'
+                });
+
+                if(!isBlank(hostKey)){
+                    myConn = createSftpConnection(sftp, paramAppzenSFTP_username, paramAppzenSFTP_URL, hostKey, keyControlModule.scriptId);
+                }
+
+                if(!isBlank(myConn)) {
+
+                    var loadFile = file.load({
+                        id : fileId
+                    });
+
+                    myConn.upload({
+                        directory: paramAppzenSFTP_dir,
+                        filename: fileName,
+                        file: loadFile,
+                        replaceExisting: true
+                    });
+                }
+
+            }
+            //endregion SFTP
 
             if(IS_LOG_ON) {
 

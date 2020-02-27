@@ -335,7 +335,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
             var fileName = 'SUPPLIER_' + timeStamp() + '.json';
             var contents = JSON.stringify(postData);
-            var fileId = createFile(fileName, contents, paramAppzenSFTP_integration_folder);
+            var fileId = createFile(file, fileName, contents, paramAppzenSFTP_integration_folder);
 
             //endregion FILE
 
@@ -363,7 +363,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 });
 
                 if(!isBlank(hostKey)){
-                    myConn = createSftpConnection(paramAppzenSFTP_username, paramAppzenSFTP_URL, hostKey, keyControlModule.scriptId);
+                    myConn = createSftpConnection(sftp, paramAppzenSFTP_username, paramAppzenSFTP_URL, hostKey, keyControlModule.scriptId);
                 }
 
                 if(!isBlank(myConn)) {
@@ -397,18 +397,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 generateLog(record, _log);
             }
 
-        }
-
-        function createFile(fileName, contents, folder) {
-            var fileObj = file.create({
-                name: fileName,
-                fileType: file.Type.PLAINTEXT,
-                contents: contents,
-                folder : folder
-            });
-
-            var id = fileObj.save();
-            return id;
         }
         
         return {

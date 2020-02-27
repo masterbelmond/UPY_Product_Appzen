@@ -4,9 +4,9 @@
  * @NModuleScope SameAccount
  */
 
-define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/file', 'N/http', 'N/https', './Appzen_Integration_library.js'],
+define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/file', 'N/http', 'N/https', 'N/keyControl', 'N/sftp', './Appzen_Integration_library.js'],
 
-    function (record, search, log, email, runtime, error, file, http, https) {
+    function (record, search, log, email, runtime, error, file, http, https, keyControl, sftp) {
 
         function execute() {
 
@@ -25,6 +25,26 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             var paramInvoiceSearch = scriptObj.getParameter({
                 name: 'custscript_appzen_invoice_search'
             });
+
+            var paramAppzenSFTP_URL = scriptObj.getParameter({
+                name: 'custscript_appzen_sftp_url'
+            });
+            var paramAppzenSFTP_username = scriptObj.getParameter({
+                name: 'custscript_appzen_sftp_username'
+            });
+            var paramAppzenSFTP_dir = scriptObj.getParameter({
+                name: 'custscript_appzen_sftp_root_dir'
+            });
+            var paramAppzenSFTP_integration_folder = scriptObj.getParameter({
+                name: 'custscript_appzen_integration_folder_id'
+            });
+
+            var paramAppzenSFTP_invoice_folder = scriptObj.getParameter({
+                name: 'custscript_appzen_sftp_dir_invoice'
+            });
+
+
+
             //endregion COMPANY PREFERENCES
 
             //region USER PREFERENCES
@@ -53,16 +73,21 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             var addressArr = [];
             var contactArr = [];
 
+            var fileAttachments = getAttachments(search);
+
             //region INVOICE SEARCH
             var searchSupplier = search.load({
                 id: paramInvoiceSearch
             });
+
+            var INTERNAL_ID = '';
 
             var resultSet = searchSupplier.run();
             searchSupplier.run().each(function(result){
 
                 var columns = result.columns;
                 var internalid = result.id;
+                INTERNAL_ID = result.id;
 
                 //external_invoice_id
                 var external_invoice_id = result.getValue({
@@ -203,7 +228,23 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 });
 
                 //region ATTACHMENTS PENDING
-                var attachments = [];
+
+
+                var attachmentsBase64 = [];
+
+                var files = getTransactionAttachments(fileAttachments, internalid);
+                if(!isBlank(files)) {
+                    for (var f in files) {
+                        var fileObj = file.load({
+                            id : files[f]
+                        });
+                        attachmentsBase64.push({
+                            'fileName' : fileObj.name,
+                            'fileExtension' : fileObj.fileType
+                        });
+                    }
+                }
+
                 //endregion ATTACHMENTS PENDING
 
                 //lines.line_number
@@ -430,6 +471,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     'payment_date' : payment_date,
                     'due_date' : due_date,
                     'total' : total,
+                    'attachmentsBase64' : attachmentsBase64,
                     'exchange_rate' : exchange_rate,
                     'bill_to_address' : bill_to_address,
                     'ship_to_address' : ship_to_address,
@@ -452,15 +494,72 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             var code = appzenResponse.code;
             var body = JSON.stringify(appzenResponse.body);
 
-            log.debug({
-                title : 'Appzen Response Code',
-                details : 'Code: ' + code
-            });
+            //region FILE
 
-            log.debug({
-                title : 'Appzen Response Body',
-                details : body
-            });
+            //Timestamp
+            var timeStamp = new Date().getTime();
+
+            var fileName = INTERNAL_ID + '_' + timeStamp + '.json';
+            var contents = JSON.stringify(postData);
+            var fileId = createFile(file, fileName, contents, paramAppzenSFTP_integration_folder);
+
+            //endregion FILE
+
+            //region SFTP
+            if(!isBlank(fileId)){
+
+                var myConn = '';
+
+                var HOST_KEY_TOOL_URL = 'https://ursuscode.com/tools/sshkeyscan.php?url=';
+                var url = paramAppzenSFTP_URL;
+                var port = '';
+                var hostKeyType = '';
+                var myUrl = HOST_KEY_TOOL_URL + url + "&port=" + port + "&type=" + hostKeyType;
+
+                var tempHostKey = https.get({url: myUrl}).body;
+                var hostKey = tempHostKey.replace(paramAppzenSFTP_URL + ' ssh-rsa ', '');
+
+                log.debug({
+                    title : 'HostKey',
+                    details : tempHostKey
+                })
+
+                var keyControlModule = keyControl.loadKey({
+                    scriptId: 'custkey_appzen_sftp'
+                });
+
+                if(!isBlank(hostKey)){
+                    myConn = createSftpConnection(sftp, paramAppzenSFTP_username, paramAppzenSFTP_URL, hostKey, keyControlModule.scriptId);
+                }
+
+                if(!isBlank(myConn)) {
+
+                    var loadFile = file.load({
+                        id : fileId
+                    });
+
+                    //Create a Folder
+                    var isoDateFolder = new Date().toISOString();
+                    var ftpRelativePath = paramAppzenSFTP_dir + paramAppzenSFTP_invoice_folder;
+
+                    myConn.makeDirectory({
+                        path: ftpRelativePath + isoDateFolder
+                    });
+
+                    myConn.makeDirectory({
+                        path: ftpRelativePath + isoDateFolder + '/attachments'
+                    });
+
+                    myConn.upload({
+                        directory: ftpRelativePath + isoDateFolder,
+                        filename: fileName,
+                        file: loadFile,
+                        replaceExisting: true
+                    });
+                }
+
+            }
+            //endregion SFTP
 
             if(IS_LOG_ON) {
 
