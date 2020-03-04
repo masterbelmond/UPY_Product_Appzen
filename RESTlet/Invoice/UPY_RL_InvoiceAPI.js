@@ -49,7 +49,7 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
             });
 
             //region POST DATA
-            var postData = {};
+            var postData = [];
 
             var _data = [];
             var invoiceArr = [];
@@ -66,6 +66,7 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
 
                 var columns = result.columns;
                 var internalid = result.id;
+                var INTERNAL_ID = result.id;
 
                 //external_invoice_id
                 var external_invoice_id = result.getValue({
@@ -77,7 +78,8 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
 
                 //external_supplier_id
                 var external_supplier_id = result.getValue({
-                    name : 'entity'
+                    name: 'internalid',
+                    join: 'vendor'
                 });
 
                 //invoice_date
@@ -85,15 +87,27 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                     name : 'trandate'
                 });
 
+                if(!isBlank(invoice_date)){
+                    invoice_date = new Date(invoice_date).toISOString();
+                }
+
                 //accounting-date
                 var accounting_date = result.getValue({
                     name : 'trandate'
                 });
 
+                if(!isBlank(accounting_date)){
+                    accounting_date = new Date(accounting_date).toISOString();
+                }
+
                 //due_date
                 var due_date = result.getValue({
                     name : 'duedate'
                 });
+
+                if(!isBlank(due_date)){
+                    due_date = new Date(due_date).toISOString();
+                }
 
                 var payment_term = {};
 
@@ -111,20 +125,47 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                     payment_term.source = objTerms.getValue({
                         fieldId: 'name'
                     });
-                    payment_term.num_days = objTerms.getValue({
+                    var num_days = objTerms.getValue({
                         fieldId: 'daysuntilnetdue'
                     });
-                    payment_term.date = result.getValue({
+
+                    if(!isBlank(num_days)) {
+                        payment_term.num_days = parseInt(num_days);
+                    }
+                    else{
+                        payment_term.num_days = parseInt(0);
+                    }
+
+                    var tempDueDate = result.getValue({
                         name: 'duedate'
                     });
+
+                    if(!isBlank(tempDueDate)){
+                        var due_date = new Date(tempDueDate).toISOString();
+                        payment_term.date = due_date;
+                    }
 
                     var discount_days = objTerms.getValue({
                         fieldId : 'daysuntilexpiry'
                     });
 
+                    if(!isBlank(discount_days)) {
+                        discount_days = parseInt(discount_days);
+                    }
+                    else{
+                        discount_days = parseInt(0);
+                    }
+
                     var discount_percent = objTerms.getValue({
                         fieldId : 'discountpercent'
-                    })
+                    });
+
+                    if(!isBlank(discount_percent)){
+                        discount_percent = parseFloat(discount_percent);
+                    }
+                    else{
+                        discount_percent = parseInt(0);
+                    }
 
                     var discount = [];
                     discount.push({
@@ -139,14 +180,28 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                     var total = result.getValue({
                         name : 'amount'
                     });
+                    if(!isBlank(total)){
+                        total = parseFloat(total);
+                    }
 
                     var currency = result.getText({
                         name : 'currency'
                     });
 
                     _total.amount = total;
-                    _total.currency = currency;
+                    _total.currency_code = currency;
 
+                }
+                else{
+                    payment_term.source = '';
+                    payment_term.num_days = parseInt(0);
+                    payment_term.date = '';
+                    var discount = [];
+                    discount.push({
+                        'discount_days': parseInt(0),
+                        'discount_percent': parseInt(0)
+                    });
+                    payment_term.discount = discount;
                 }
 
 
@@ -160,12 +215,19 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                     name : 'closedate'
                 });
 
+                if(!isBlank(payment_date)){
+                    payment_date = new Date(payment_date).toISOString();
+                }
+
                 var _total = {};
 
                 //total.amount
                 var total = result.getValue({
                     name : 'total'
                 });
+                if(!isBlank(total)){
+                    total = parseFloat(total);
+                }
 
                 //total.currency_code
                 var currency_code = result.getText({
@@ -191,28 +253,31 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                     name : 'exchangerate'
                 });
 
+                if(!isBlank(exchange_rate_conversion_rate)){
+                    exchange_rate_conversion_rate = parseFloat(exchange_rate_conversion_rate);
+                }
+
                 exchange_rate.to_currency_code = exchange_rate_to_currency_code;
                 exchange_rate.from_currency_code = exchange_rate_from_currency_code;
                 exchange_rate.conversion_rate = exchange_rate_conversion_rate;
 
                 //external_status
-                var payment_status = result.getValue({
-                    name : 'payment_status'
-                });
-
-                //external_status
                 var external_status = result.getValue({
-                    name : 'line'
+                    name : 'statusRef'
                 });
 
-                //region ATTACHMENTS PENDING
-                var attachments = [];
-                //endregion ATTACHMENTS PENDING
+                if(isBlank(external_status)){
+                    external_status = '';
+                }
 
                 //lines.line_number
                 var lines_line_number = result.getValue({
                     name : 'linesequencenumber'
                 });
+
+                if(!isBlank(lines_line_number)){
+                    lines_line_number = parseInt(lines_line_number);
+                }
 
                 var ship_to_address = {};
 
@@ -346,6 +411,10 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                     name : 'linesequencenumber'
                 });
 
+                if(!isBlank(lines_line_number)){
+                    lines_line_number = parseInt(lines_line_number);
+                }
+
                 //lines.item_description
                 var lines_item_description = result.getValue({
                     name : 'salesdescription',
@@ -356,6 +425,13 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                 var lines_quantity = result.getValue({
                     name : 'quantity'
                 });
+
+                if(!isBlank(lines_quantity)) {
+                    lines_quantity = parseInt(lines_quantity);
+                }
+                else{
+                    lines_quantity = parseInt(0);
+                }
 
                 //lines.unit_of_measure
                 var lines_unit_of_measure = result.getValue({
@@ -369,6 +445,14 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                 var lines_unit_price_amount = result.getValue({
                     name : 'rate'
                 });
+
+                if(!isBlank(lines_unit_price_amount)){
+                    lines_unit_price_amount = parseFloat(lines_unit_price_amount);
+                }
+                else{
+                    lines_unit_price_amount = parseFloat(0.00);
+                }
+
                 //lines.unit_list_price.currency_code
                 var lines_unit_price_currency_code = result.getText({
                     name : 'currency'
@@ -387,6 +471,15 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                 var lines_total_price_amount = result.getValue({
                     name : 'amount'
                 });
+
+                if(!isBlank(lines_total_price_amount)){
+                    lines_total_price_amount = parseFloat(lines_total_price_amount);
+                }
+                else{
+                    lines_total_price_amount = parseFloat(0.00);
+                }
+
+
                 //lines.unit_list_price.currency_code
                 var lines_total_price_currency_code = result.getText({
                     name : 'currency'
@@ -421,24 +514,53 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                     'unit_of_measure' : lines_unit_of_measure,
                     'external_status' : lines_external_status
                 });
-
                 invoiceArr.push({
                     'external_invoice_id' : external_invoice_id,
                     'external_invoice_number' : external_invoice_number,
+                    'external_supplier_id' : external_supplier_id,
                     'invoice_date' : invoice_date,
                     'accounting-date' : accounting_date,
-                    'external_supplier_id' : external_supplier_id,
+                    'document_type' : '',
                     'payment_term' : payment_term,
-                    'payment_status' : payment_status,
+                    'payment_status' : lines_external_status,
                     'payment_date' : payment_date,
                     'due_date' : due_date,
-                    'total' : total,
+                    'total' : _total,
                     'exchange_rate' : exchange_rate,
                     'bill_to_address' : bill_to_address,
                     'ship_to_address' : ship_to_address,
                     'external_status' : external_status,
                     'lines' : lines
                 });
+
+                var payloadGrouped = groupBy(invoiceArr, 'external_invoice_id');
+
+                var _data = [];
+
+                for(var i in payloadGrouped){
+
+                    var invoiceArrTemp = payloadGrouped[i];
+
+                    if(invoiceArrTemp.length > 1){
+                        //multiple ilines
+                        var mainArr = invoiceArrTemp[0];
+                        for(var t in invoiceArrTemp){
+
+                            if(parseInt(t) != 0) {
+                                invoiceArrTemp[0].lines.push(invoiceArrTemp[t].lines);
+                            }
+                        }
+                        _data.push(invoiceArrTemp);
+                        //console.log(invoiceArrTemp);
+                    }
+                    else{
+                        _data.push(invoiceArrTemp);
+                        //console.log(invoiceArrTemp);
+                    }
+                }
+
+                postData.push(_data);
+
                 return true;
             });
 
@@ -449,6 +571,13 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
 
             return postData;
         }
+
+        var groupBy = function(xs, key) {
+            return xs.reduce(function(rv, x) {
+                (rv[x[key]] = rv[x[key]] || []).push(x);
+                return rv;
+            }, {});
+        };
 
         return {
             get : doGet,

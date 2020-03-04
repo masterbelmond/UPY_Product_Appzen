@@ -38,6 +38,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             var paramAppzenSFTP_integration_folder = scriptObj.getParameter({
                 name: 'custscript_appzen_integration_folder_id'
             });
+            var paramAppzenSFTP_supplier_folder = scriptObj.getParameter({
+                name: 'custscript_appzen_sftp_dir_supplier'
+            });
 
             log.debug({
                 title : 'COMPANY PREFERENCES',
@@ -57,12 +60,49 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             var TYPE = 'type=supplier';
             var NETSUITE_CUSTOMER_ID = '&customer_id=' + paramAppzenCustomerID;
             var ENDPOINT = URI + TYPE + NETSUITE_CUSTOMER_ID;
+            var TIMESTAMP = new Date().getTime();
             //endregion GLOBAL VAR
 
+            //region Create SFTP Directories
+            var myConn = '';
+
+            var ISO_DATE_FOLDER = '';
+            var HOST_KEY_TOOL_URL = 'https://ursuscode.com/tools/sshkeyscan.php?url=';
+            var url = paramAppzenSFTP_URL;
+            var port = '';
+            var hostKeyType = '';
+            var myUrl = HOST_KEY_TOOL_URL + url + "&port=" + port + "&type=" + hostKeyType;
+
+            var tempHostKey = https.get({url: myUrl}).body;
+            var hostKey = tempHostKey.replace(paramAppzenSFTP_URL + ' ssh-rsa ', '');
+
+            var keyControlModule = keyControl.loadKey({
+                scriptId: 'custkey_appzen_sftp'
+            });
+
+            if(!isBlank(hostKey)){
+                myConn = createSftpConnection(sftp, paramAppzenSFTP_username, paramAppzenSFTP_URL, hostKey, keyControlModule.scriptId);
+            }
+
+            if(!isBlank(myConn)) {
+
+                //Create a Folder
+                var tempDate = new Date();;
+                var tempFolder =  tempDate.toISOString().split('.')[0]+"Z";
+                var isoDateFolder = tempFolder.replace(/:\s*/g, ".");
+                ISO_DATE_FOLDER = isoDateFolder;
+
+                var ftpRelativePath = paramAppzenSFTP_dir + paramAppzenSFTP_supplier_folder;
+
+                myConn.makeDirectory({
+                    path: ftpRelativePath + isoDateFolder
+                });
+            }
+
+            //endregion Create SFTP Directories
 
             //region POST DATA
             var postData = {};
-
             var _data = [];
             var suppliersArr = [];
             var addressArr = [];
@@ -106,9 +146,22 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 });
 
                 //on_file_1099
+                var on_file_1099 = '';
                 var is1099eligible = result.getValue({
                     name : 'is1099eligible'
                 });
+
+                if(!isBlank(is1099eligible)){
+                    if(is1099eligible){
+                        on_file_1099 = "true";
+                    }
+                    else{
+                        on_file_1099 = "false";
+                    }
+                }
+                else{
+                    on_file_1099 = "false";
+                }
 
                 //vat_registration_number
                 var vat_registration_number = result.getValue(columns[7]);
@@ -126,10 +179,10 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 var is_active;
                 var deactive_date;
                 if(is_inactive){
-                    is_active = true;
+                    is_active = "true";
                 }
                 else{
-                    is_active = false;
+                    is_active = "false";
                 }
 
                 //note
@@ -142,13 +195,15 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     'external_site_id' : addressinternalid,
                     'supplier_name' : supplier_name,
                     'web_site' : url,
-                    'on_file_1099' : is1099eligible,
+                    'on_file_1099' : on_file_1099,
                     'vat_registration_number' : vat_registration_number,
                     'fed_tax_id' : accountnumber,
                     'is_active' : is_active,
                     'note' : note
                 });
+
                 return true;
+
             });
 
             //endregion SUPPLIER SEARCH
@@ -156,7 +211,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             //region ADDRESS SEARCH
 
             var searchAddress = search.load({
-                id: '202'
+                id: 'customsearch_upy_vendor_address_search'
             });
             var addressResultSet = searchAddress.run();
             searchAddress.run().each(function(result){
@@ -248,7 +303,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             //region CONTACT SEARCH
 
             var searchContact = search.load({
-                id: '203'
+                id: 'customsearch_upy_vendor_contacts'
             });
 
             var contactResultSet = searchContact.run();
@@ -296,6 +351,8 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
             //endregion CONTACT SEARCH
 
+            //region REGROUP
+
             for(var i in suppliersArr){
 
                 var id = suppliersArr[i].external_supplier_id;
@@ -319,13 +376,14 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 _data.push(arrSupplier);
             }
 
+            //endregion REGROUP
+
             postData.suppliers = _data;
 
             var appzenResponse = https.post({
                 url : ENDPOINT,
                 body : postData
             });
-
             var code = appzenResponse.code;
             var body = JSON.stringify(appzenResponse.body);
 
@@ -333,61 +391,60 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
             //region FILE
 
-            var fileName = 'SUPPLIER_' + timeStamp() + '.json';
-            var contents = JSON.stringify(postData);
-            var fileId = createFile(file, fileName, contents, paramAppzenSFTP_integration_folder);
+            if(!isBlank(postData)) {
 
-            //endregion FILE
+                var supplierCount = postData.suppliers.length;
 
-            //region SFTP
-            if(!isBlank(fileId)){
+                for(var i in postData.suppliers){
 
-                var myConn = '';
-
-                var HOST_KEY_TOOL_URL = 'https://ursuscode.com/tools/sshkeyscan.php?url=';
-                var url = paramAppzenSFTP_URL;
-                var port = '';
-                var hostKeyType = '';
-                var myUrl = HOST_KEY_TOOL_URL + url + "&port=" + port + "&type=" + hostKeyType;
-
-                var tempHostKey = https.get({url: myUrl}).body;
-                var hostKey = tempHostKey.replace(paramAppzenSFTP_URL + ' ssh-rsa ', '');
-
-                log.debug({
-                    title : 'HostKey',
-                    details : tempHostKey
-                })
-
-                var keyControlModule = keyControl.loadKey({
-                    scriptId: 'custkey_appzen_sftp'
-                });
-
-                if(!isBlank(hostKey)){
-                    myConn = createSftpConnection(sftp, paramAppzenSFTP_username, paramAppzenSFTP_URL, hostKey, keyControlModule.scriptId);
-                }
-
-                if(!isBlank(myConn)) {
+                    var _temp = [];
+                    var _data = {};
+                    var supplier = postData.suppliers[i];
+                    _temp.push(supplier);
+                    var fileName = supplier.external_supplier_id  + '_' + TIMESTAMP + '.json';
+                    _data.suppliers = _temp;
+                    var fileId = createFile(file, fileName, JSON.stringify(_data), paramAppzenSFTP_integration_folder);
 
                     var loadFile = file.load({
                         id : fileId
                     });
 
                     myConn.upload({
-                        directory: paramAppzenSFTP_dir,
+                        directory: ftpRelativePath + isoDateFolder,
                         filename: fileName,
                         file: loadFile,
                         replaceExisting: true
                     });
                 }
 
+                //region Create Trigger File
+                var fileName = ISO_DATE_FOLDER + '.trigger';
+                var _data = '';
+                var fileTrigger = createFile(file, fileName, _data, paramAppzenSFTP_integration_folder);
+                var loadFile = file.load({
+                    id : fileTrigger
+                });
+
+                myConn.upload({
+                    directory: ftpRelativePath,
+                    filename: fileName,
+                    file: loadFile,
+                    replaceExisting: true
+                });
+                //endregion Create Trigger File
+
             }
-            //endregion SFTP
+
+            var contents = JSON.stringify(postData);
+
+            //endregion FILE
+
 
             if(IS_LOG_ON) {
 
                 var _log = {
                     'datetime' : new Date(),
-                    'request' : postData,
+                    'request' : contents,
                     'response' : body,
                     'url' : ENDPOINT,
                     'code' : code,

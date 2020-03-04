@@ -42,9 +42,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             var paramAppzenSFTP_invoice_folder = scriptObj.getParameter({
                 name: 'custscript_appzen_sftp_dir_invoice'
             });
-
-
-
             //endregion COMPANY PREFERENCES
 
             //region USER PREFERENCES
@@ -58,7 +55,50 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             var TYPE = 'type=invoice';
             var NETSUITE_CUSTOMER_ID = '&customer_id=' + paramAppzenCustomerID;
             var ENDPOINT = URI + TYPE + NETSUITE_CUSTOMER_ID;
+            var TIMESTAMP = new Date().getTime();
             //endregion GLOBAL VAR
+
+            //region Create SFTP Directories
+            var myConn = '';
+
+            var ISO_DATE_FOLDER = '';
+            var HOST_KEY_TOOL_URL = 'https://ursuscode.com/tools/sshkeyscan.php?url=';
+            var url = paramAppzenSFTP_URL;
+            var port = '';
+            var hostKeyType = '';
+            var myUrl = HOST_KEY_TOOL_URL + url + "&port=" + port + "&type=" + hostKeyType;
+
+            var tempHostKey = https.get({url: myUrl}).body;
+            var hostKey = tempHostKey.replace(paramAppzenSFTP_URL + ' ssh-rsa ', '');
+
+            var keyControlModule = keyControl.loadKey({
+                scriptId: 'custkey_appzen_sftp'
+            });
+
+            if(!isBlank(hostKey)){
+                myConn = createSftpConnection(sftp, paramAppzenSFTP_username, paramAppzenSFTP_URL, hostKey, keyControlModule.scriptId);
+            }
+
+            if(!isBlank(myConn)) {
+
+                //Create a Folder
+                var tempDate = new Date();;
+                var tempFolder =  tempDate.toISOString().split('.')[0]+"Z";
+                var isoDateFolder = tempFolder.replace(/:\s*/g, ".");
+                ISO_DATE_FOLDER = isoDateFolder;
+
+                var ftpRelativePath = paramAppzenSFTP_dir + paramAppzenSFTP_invoice_folder;
+
+                myConn.makeDirectory({
+                    path: ftpRelativePath + isoDateFolder
+                });
+
+                myConn.makeDirectory({
+                    path: ftpRelativePath + isoDateFolder + '/attachments'
+                });
+            }
+
+            //endregion Create SFTP Directories
 
             log.debug({
                 title : 'PARAMETERS',
@@ -66,10 +106,10 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             });
 
             //region POST DATA
-            var postData = {};
+            var postData = [];
+            var invoiceArr = [];
 
             var _data = [];
-            var invoiceArr = [];
             var addressArr = [];
             var contactArr = [];
 
@@ -80,14 +120,13 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 id: paramInvoiceSearch
             });
 
-            var INTERNAL_ID = '';
-
             var resultSet = searchSupplier.run();
+
             searchSupplier.run().each(function(result){
 
                 var columns = result.columns;
                 var internalid = result.id;
-                INTERNAL_ID = result.id;
+                var INTERNAL_ID = result.id;
 
                 //external_invoice_id
                 var external_invoice_id = result.getValue({
@@ -99,7 +138,8 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                 //external_supplier_id
                 var external_supplier_id = result.getValue({
-                    name : 'entity'
+                    name: 'internalid',
+                    join: 'vendor'
                 });
 
                 //invoice_date
@@ -107,15 +147,27 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     name : 'trandate'
                 });
 
+                if(!isBlank(invoice_date)){
+                    invoice_date = new Date(invoice_date).toISOString();
+                }
+
                 //accounting-date
                 var accounting_date = result.getValue({
                     name : 'trandate'
                 });
 
+                if(!isBlank(accounting_date)){
+                    accounting_date = new Date(accounting_date).toISOString();
+                }
+
                 //due_date
                 var due_date = result.getValue({
                     name : 'duedate'
                 });
+
+                if(!isBlank(due_date)){
+                    due_date = new Date(due_date).toISOString();
+                }
 
                 var payment_term = {};
 
@@ -133,20 +185,47 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     payment_term.source = objTerms.getValue({
                         fieldId: 'name'
                     });
-                    payment_term.num_days = objTerms.getValue({
+                    var num_days = objTerms.getValue({
                         fieldId: 'daysuntilnetdue'
                     });
-                    payment_term.date = result.getValue({
+
+                    if(!isBlank(num_days)) {
+                        payment_term.num_days = parseInt(num_days);
+                    }
+                    else{
+                        payment_term.num_days = parseInt(0);
+                    }
+
+                    var tempDueDate = result.getValue({
                         name: 'duedate'
                     });
+
+                    if(!isBlank(tempDueDate)){
+                        var due_date = new Date(tempDueDate).toISOString();
+                        payment_term.date = due_date;
+                    }
 
                     var discount_days = objTerms.getValue({
                         fieldId : 'daysuntilexpiry'
                     });
 
+                    if(!isBlank(discount_days)) {
+                        discount_days = parseInt(discount_days);
+                    }
+                    else{
+                        discount_days = parseInt(0);
+                    }
+
                     var discount_percent = objTerms.getValue({
                         fieldId : 'discountpercent'
-                    })
+                    });
+
+                    if(!isBlank(discount_percent)){
+                        discount_percent = parseFloat(discount_percent);
+                    }
+                    else{
+                        discount_percent = parseInt(0);
+                    }
 
                     var discount = [];
                     discount.push({
@@ -161,14 +240,28 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     var total = result.getValue({
                         name : 'amount'
                     });
+                    if(!isBlank(total)){
+                        total = parseFloat(total);
+                    }
 
                     var currency = result.getText({
                         name : 'currency'
                     });
 
                     _total.amount = total;
-                    _total.currency = currency;
+                    _total.currency_code = currency;
 
+                }
+                else{
+                    payment_term.source = '';
+                    payment_term.num_days = parseInt(0);
+                    payment_term.date = '';
+                    var discount = [];
+                    discount.push({
+                        'discount_days': parseInt(0),
+                        'discount_percent': parseInt(0)
+                    });
+                    payment_term.discount = discount;
                 }
 
 
@@ -182,12 +275,19 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     name : 'closedate'
                 });
 
+                if(!isBlank(payment_date)){
+                    payment_date = new Date(payment_date).toISOString();
+                }
+
                 var _total = {};
 
                 //total.amount
                 var total = result.getValue({
                     name : 'total'
                 });
+                if(!isBlank(total)){
+                    total = parseFloat(total);
+                }
 
                 //total.currency_code
                 var currency_code = result.getText({
@@ -213,21 +313,25 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     name : 'exchangerate'
                 });
 
+                if(!isBlank(exchange_rate_conversion_rate)){
+                    exchange_rate_conversion_rate = parseFloat(exchange_rate_conversion_rate);
+                }
+
                 exchange_rate.to_currency_code = exchange_rate_to_currency_code;
                 exchange_rate.from_currency_code = exchange_rate_from_currency_code;
                 exchange_rate.conversion_rate = exchange_rate_conversion_rate;
 
                 //external_status
-                var payment_status = result.getValue({
-                    name : 'payment_status'
-                });
-
-                //external_status
                 var external_status = result.getValue({
-                    name : 'line'
+                    name : 'statusRef'
                 });
 
-                //region ATTACHMENTS PENDING
+                if(isBlank(external_status)){
+                    external_status = '';
+                }
+
+
+                //region ATTACHMENTS
 
 
                 var attachmentsBase64 = [];
@@ -245,12 +349,16 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     }
                 }
 
-                //endregion ATTACHMENTS PENDING
+                //endregion ATTACHMENTS
 
                 //lines.line_number
                 var lines_line_number = result.getValue({
                     name : 'linesequencenumber'
                 });
+
+                if(!isBlank(lines_line_number)){
+                    lines_line_number = parseInt(lines_line_number);
+                }
 
                 var ship_to_address = {};
 
@@ -384,6 +492,10 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     name : 'linesequencenumber'
                 });
 
+                if(!isBlank(lines_line_number)){
+                    lines_line_number = parseInt(lines_line_number);
+                }
+
                 //lines.item_description
                 var lines_item_description = result.getValue({
                     name : 'salesdescription',
@@ -394,6 +506,13 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 var lines_quantity = result.getValue({
                     name : 'quantity'
                 });
+
+                if(!isBlank(lines_quantity)) {
+                    lines_quantity = parseInt(lines_quantity);
+                }
+                else{
+                    lines_quantity = parseInt(0);
+                }
 
                 //lines.unit_of_measure
                 var lines_unit_of_measure = result.getValue({
@@ -407,6 +526,14 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 var lines_unit_price_amount = result.getValue({
                     name : 'rate'
                 });
+
+                if(!isBlank(lines_unit_price_amount)){
+                    lines_unit_price_amount = parseFloat(lines_unit_price_amount);
+                }
+                else{
+                    lines_unit_price_amount = parseFloat(0.00);
+                }
+
                 //lines.unit_list_price.currency_code
                 var lines_unit_price_currency_code = result.getText({
                     name : 'currency'
@@ -425,6 +552,15 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 var lines_total_price_amount = result.getValue({
                     name : 'amount'
                 });
+
+                if(!isBlank(lines_total_price_amount)){
+                    lines_total_price_amount = parseFloat(lines_total_price_amount);
+                }
+                else{
+                    lines_total_price_amount = parseFloat(0.00);
+                }
+
+
                 //lines.unit_list_price.currency_code
                 var lines_total_price_currency_code = result.getText({
                     name : 'currency'
@@ -459,18 +595,18 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     'unit_of_measure' : lines_unit_of_measure,
                     'external_status' : lines_external_status
                 });
-
                 invoiceArr.push({
                     'external_invoice_id' : external_invoice_id,
                     'external_invoice_number' : external_invoice_number,
+                    'external_supplier_id' : external_supplier_id,
                     'invoice_date' : invoice_date,
                     'accounting-date' : accounting_date,
-                    'external_supplier_id' : external_supplier_id,
+                    'document_type' : '',
                     'payment_term' : payment_term,
-                    'payment_status' : payment_status,
+                    'payment_status' : lines_external_status,
                     'payment_date' : payment_date,
                     'due_date' : due_date,
-                    'total' : total,
+                    'total' : _total,
                     'attachmentsBase64' : attachmentsBase64,
                     'exchange_rate' : exchange_rate,
                     'bill_to_address' : bill_to_address,
@@ -478,88 +614,75 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     'external_status' : external_status,
                     'lines' : lines
                 });
+
+                //Create a File
+                var fileName = INTERNAL_ID + '_' + TIMESTAMP + '.json';
+                var _data = {};
+                _data.invoices = invoiceArr;
+                var contents = JSON.stringify(_data);
+                var fileId = createFile(file, fileName, contents, paramAppzenSFTP_integration_folder);
+
+                var loadFile = file.load({
+                    id : fileId
+                });
+
+                myConn.upload({
+                    directory: ftpRelativePath + isoDateFolder,
+                    filename: fileName,
+                    file: loadFile,
+                    replaceExisting: true
+                });
+
+                if(!isBlank(files)) {
+                    for (var f in files) {
+
+                        var fileObj = file.load({
+                            id : files[f]
+                        });
+
+                        var attachmentFileName = fileObj.name;
+
+                        myConn.upload({
+                            directory: ftpRelativePath + isoDateFolder + '/attachments',
+                            filename: attachmentFileName,
+                            file: fileObj,
+                            replaceExisting: true
+                        });
+
+                    }
+                }
+
+                //region Create Trigger File
+                var fileName = ISO_DATE_FOLDER + '.trigger';
+                var _data = '';
+                var fileTrigger = createFile(file, fileName, _data, paramAppzenSFTP_integration_folder);
+                var loadFile = file.load({
+                    id : fileTrigger
+                });
+
+                myConn.upload({
+                    directory: ftpRelativePath,
+                    filename: fileName,
+                    file: loadFile,
+                    replaceExisting: true
+                });
+                //endregion Create Trigger File
+
+                postData.push(invoiceArr);
+
                 return true;
             });
 
             //endregion INVOICE SEARCH
 
-            postData = invoiceArr;
             //endregion POST DATA
-
             var appzenResponse = https.post({
                 url : ENDPOINT,
                 body : postData
             });
-
             var code = appzenResponse.code;
             var body = JSON.stringify(appzenResponse.body);
 
-            //region FILE
-
-            //Timestamp
-            var timeStamp = new Date().getTime();
-
-            var fileName = INTERNAL_ID + '_' + timeStamp + '.json';
-            var contents = JSON.stringify(postData);
-            var fileId = createFile(file, fileName, contents, paramAppzenSFTP_integration_folder);
-
-            //endregion FILE
-
-            //region SFTP
-            if(!isBlank(fileId)){
-
-                var myConn = '';
-
-                var HOST_KEY_TOOL_URL = 'https://ursuscode.com/tools/sshkeyscan.php?url=';
-                var url = paramAppzenSFTP_URL;
-                var port = '';
-                var hostKeyType = '';
-                var myUrl = HOST_KEY_TOOL_URL + url + "&port=" + port + "&type=" + hostKeyType;
-
-                var tempHostKey = https.get({url: myUrl}).body;
-                var hostKey = tempHostKey.replace(paramAppzenSFTP_URL + ' ssh-rsa ', '');
-
-                log.debug({
-                    title : 'HostKey',
-                    details : tempHostKey
-                })
-
-                var keyControlModule = keyControl.loadKey({
-                    scriptId: 'custkey_appzen_sftp'
-                });
-
-                if(!isBlank(hostKey)){
-                    myConn = createSftpConnection(sftp, paramAppzenSFTP_username, paramAppzenSFTP_URL, hostKey, keyControlModule.scriptId);
-                }
-
-                if(!isBlank(myConn)) {
-
-                    var loadFile = file.load({
-                        id : fileId
-                    });
-
-                    //Create a Folder
-                    var isoDateFolder = new Date().toISOString();
-                    var ftpRelativePath = paramAppzenSFTP_dir + paramAppzenSFTP_invoice_folder;
-
-                    myConn.makeDirectory({
-                        path: ftpRelativePath + isoDateFolder
-                    });
-
-                    myConn.makeDirectory({
-                        path: ftpRelativePath + isoDateFolder + '/attachments'
-                    });
-
-                    myConn.upload({
-                        directory: ftpRelativePath + isoDateFolder,
-                        filename: fileName,
-                        file: loadFile,
-                        replaceExisting: true
-                    });
-                }
-
-            }
-            //endregion SFTP
 
             if(IS_LOG_ON) {
 
@@ -569,7 +692,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     'response' : body,
                     'url' : ENDPOINT,
                     'code' : code,
-                    'record_type' : RECORD_TYPE_LIST.VENDOR
+                    'record_type' : RECORD_TYPE_LIST.INVOICE
                 };
 
                 generateLog(record, _log);

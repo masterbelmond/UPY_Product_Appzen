@@ -148,9 +148,13 @@ function findFromArray(array,key,value) {
 function generateLog(record, _log){
 
     var req = _log.request;
-
-    var request = req.slice(0, 999);
-
+    var request = '';
+    if(!isBlank(req)) {
+        request = req.slice(0, 999);
+    }
+    else{
+        request = req;
+    }
     var logs = record.create({
         type: 'customrecord_appzen_integration_logs',
         isDynamic: true
@@ -207,6 +211,18 @@ function isBlank(test) {
     }
 }
 
+function convertStrToBool(str)
+{
+    switch(String(str).toLowerCase())
+    {
+        case 'undefined': case 'null': case 'nan': case 'false': case 'no': case 'f': case 'n': case '0': case 'off': case '':
+        return false;
+        break;
+        default:
+            return true;
+    };
+};
+
 //endregion FUNCTIONS
 
 //region LIST
@@ -214,8 +230,8 @@ function isBlank(test) {
 
 var RECORD_TYPE_LIST = {
     'VENDOR' : '-3',
-    'PURCHASE_ORDER' : '',
-    'INVOICE' : ''
+    'PURCHASE_ORDER' : '-30',
+    'INVOICE' : '-30'
 };
 
 //endregion LIST
