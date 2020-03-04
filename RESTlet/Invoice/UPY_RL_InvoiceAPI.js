@@ -115,6 +115,19 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                     name : 'terms'
                 });
 
+                var document_type = result.getValue({
+                    name : 'type'
+                });
+
+                if(!isBlank(document_type)){
+                    if(document_type == 'VendBill'){
+                        document_type = 'invoice';
+                    }
+                    else if(document_type == 'VendCred'){
+                        document_type = 'credit note';
+                    }
+                }
+
                 if(!isBlank(terms)) {
 
                     var objTerms = record.load({
@@ -520,7 +533,7 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                     'external_supplier_id' : external_supplier_id,
                     'invoice_date' : invoice_date,
                     'accounting-date' : accounting_date,
-                    'document_type' : '',
+                    'document_type' : document_type,
                     'payment_term' : payment_term,
                     'payment_status' : lines_external_status,
                     'payment_date' : payment_date,
@@ -533,38 +546,42 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                     'lines' : lines
                 });
 
-                var payloadGrouped = groupBy(invoiceArr, 'external_invoice_id');
-
-                var _data = [];
-
-                for(var i in payloadGrouped){
-
-                    var invoiceArrTemp = payloadGrouped[i];
-
-                    if(invoiceArrTemp.length > 1){
-                        //multiple ilines
-                        var mainArr = invoiceArrTemp[0];
-                        for(var t in invoiceArrTemp){
-
-                            if(parseInt(t) != 0) {
-                                invoiceArrTemp[0].lines.push(invoiceArrTemp[t].lines);
-                            }
-                        }
-                        _data.push(invoiceArrTemp);
-                        //console.log(invoiceArrTemp);
-                    }
-                    else{
-                        _data.push(invoiceArrTemp);
-                        //console.log(invoiceArrTemp);
-                    }
-                }
-
-                postData.push(_data);
-
                 return true;
             });
 
             //endregion INVOICE SEARCH
+
+
+            var payloadGrouped = groupBy(invoiceArr, 'external_invoice_id');
+
+            log.debug('payloadGrouped ', JSON.stringify(payloadGrouped));
+
+            var _data = [];
+
+            for(var i in payloadGrouped){
+
+                var invoiceArrTemp = payloadGrouped[i];
+
+                if(invoiceArrTemp.length > 1){
+                    //multiple ilines
+                    var mainArr = invoiceArrTemp[0];
+                    for(var t in invoiceArrTemp){
+
+                        if(parseInt(t) != 0) {
+                            mainArr.lines.push(invoiceArrTemp[t].lines);
+                        }
+                    }
+                    _data.push(invoiceArrTemp);
+                    //log.debug('2 | Sequence: ' + i, invoiceArrTemp);
+                }
+                else{
+                    _data.push(invoiceArrTemp);
+                    //log.debug('1 | Sequence: ' + i, invoiceArrTemp);
+                }
+            }
+
+            postData.push(_data);
+
 
             postData = invoiceArr;
             //endregion POST DATA

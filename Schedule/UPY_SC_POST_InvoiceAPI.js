@@ -107,6 +107,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
             //region POST DATA
             var postData = [];
+            var files = [];
             var invoiceArr = [];
 
             var _data = [];
@@ -264,6 +265,19 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     payment_term.discount = discount;
                 }
 
+                //document_type
+                var document_type = result.getValue({
+                    name : 'type'
+                });
+
+                if(!isBlank(document_type)){
+                    if(document_type == 'VendBill'){
+                        document_type = 'invoice';
+                    }
+                    else if(document_type == 'VendCred'){
+                        document_type = 'credit note';
+                    }
+                }
 
                 //payment_status
                 var payment_status = result.getValue({
@@ -336,7 +350,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                 var attachmentsBase64 = [];
 
-                var files = getTransactionAttachments(fileAttachments, internalid);
+                files = getTransactionAttachments(fileAttachments, internalid);
                 if(!isBlank(files)) {
                     for (var f in files) {
                         var fileObj = file.load({
@@ -601,7 +615,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     'external_supplier_id' : external_supplier_id,
                     'invoice_date' : invoice_date,
                     'accounting-date' : accounting_date,
-                    'document_type' : '',
+                    'document_type' : document_type,
                     'payment_term' : payment_term,
                     'payment_status' : lines_external_status,
                     'payment_date' : payment_date,
@@ -615,17 +629,57 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     'lines' : lines
                 });
 
-                //Create a File
-                var fileName = INTERNAL_ID + '_' + TIMESTAMP + '.json';
+                return true;
+            });
+            //endregion INVOICE SEARCH
+
+            //region GROUP Lines
+            var payloadGrouped = groupBy(invoiceArr, 'external_invoice_id');
+
+            log.debug({
+                title : 'payloadGrouped',
+                details : JSON.stringify(payloadGrouped)
+            })
+
+            var _dataArr = [];
+
+            for(var i in payloadGrouped){
+
+                var invoiceArrTemp = payloadGrouped[i].data;
+
+                if(invoiceArrTemp.length > 1){
+                    //multiple lines
+                    var mainArr = invoiceArrTemp[0];
+                    for(var t in invoiceArrTemp){
+
+                        if(parseInt(t) != 0) {
+                            mainArr.lines.push(invoiceArrTemp[t].lines[0]);
+                        }
+                    }
+                    _dataArr.push(mainArr);
+                }
+                else{
+                    _dataArr.push(invoiceArrTemp[0]);
+                }
+            }
+
+            log.debug('_dataArr', JSON.stringify(_dataArr));
+
+            for(var z in _dataArr){
+
+                //region Create a File
+                var fileName = _dataArr[z].external_invoice_id + '_' + TIMESTAMP + '.json';
                 var _data = {};
-                _data.invoices = invoiceArr;
+                _data.invoices = _dataArr[z];
                 var contents = JSON.stringify(_data);
                 var fileId = createFile(file, fileName, contents, paramAppzenSFTP_integration_folder);
 
                 var loadFile = file.load({
                     id : fileId
                 });
+                //endregion Create a File
 
+                //region Upload a File
                 myConn.upload({
                     directory: ftpRelativePath + isoDateFolder,
                     filename: fileName,
@@ -651,29 +705,27 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                     }
                 }
+                //endregion Upload a File
+            }
 
-                //region Create Trigger File
-                var fileName = ISO_DATE_FOLDER + '.trigger';
-                var _data = '';
-                var fileTrigger = createFile(file, fileName, _data, paramAppzenSFTP_integration_folder);
-                var loadFile = file.load({
-                    id : fileTrigger
-                });
-
-                myConn.upload({
-                    directory: ftpRelativePath,
-                    filename: fileName,
-                    file: loadFile,
-                    replaceExisting: true
-                });
-                //endregion Create Trigger File
-
-                postData.push(invoiceArr);
-
-                return true;
+            //region Create Trigger File
+            var fileName = ISO_DATE_FOLDER + '.trigger';
+            var _data = '';
+            var fileTrigger = createFile(file, fileName, _data, paramAppzenSFTP_integration_folder);
+            var loadFile = file.load({
+                id : fileTrigger
             });
 
-            //endregion INVOICE SEARCH
+            myConn.upload({
+                directory: ftpRelativePath,
+                filename: fileName,
+                file: loadFile,
+                replaceExisting: true
+            });
+            //endregion Create Trigger File
+
+            postData.push(_data);
+            //endregion GROUP Lines
 
             //endregion POST DATA
             var appzenResponse = https.post({

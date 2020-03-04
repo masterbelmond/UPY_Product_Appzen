@@ -1,5 +1,42 @@
 //region FUNCTIONS
 
+function groupBy(arr, key) {
+    var newArr = [],
+        types = {},
+        newItem, i, j, cur;
+    for (i = 0, j = arr.length; i < j; i++) {
+        cur = arr[i];
+        if (!(cur[key] in types)) {
+            types[cur[key]] = { type: cur[key], data: [] };
+            newArr.push(types[cur[key]]);
+        }
+        types[cur[key]].data.push(cur);
+    }
+    return newArr;
+}
+
+
+/**
+ * @param {string} msg message title
+ * @param {string} str debug message
+ */
+var loggerJSON = function(log, msg, str) {
+
+    var sequenceNum = '';
+    if (!isBlank(str)) {
+        if (str.length >= 4000) {
+            var arrStr = str.match(/.{1,4000}/g);
+            for (var i in arrStr) {
+                sequenceNum = (parseInt(i) + 1) + ' of ' + arrStr.length;
+                log.debug('DEBUG', msg + ' | ' + sequenceNum, arrStr[i]);
+            }
+        } else {
+            sequenceNum = '';
+            log.debug('DEBUG', msg + ' | ' + sequenceNum, str);
+        }
+    }
+};
+
 function getAttachments(search) {
 
     var fileArr = [];
@@ -62,6 +99,69 @@ function getAttachments(search) {
     });
 
     return fileArr;
+}
+
+function getVendorAttachments(search){
+
+    var fileArr = [];
+
+    var vendorSearchObj = search.create({
+        type: 'vendor',
+        filters:
+            [
+                ['file.internalid','noneof','@NONE@']
+            ],
+        columns:
+            [
+                search.createColumn({
+                    name: 'internalid',
+                    summary: 'GROUP',
+                    label: 'Internal ID'
+                }),
+                search.createColumn({
+                    name: 'internalid',
+                    join: 'file',
+                    summary: 'GROUP',
+                    label: 'Internal ID'
+                })
+            ]
+    });
+    var searchResultCount = vendorSearchObj.runPaged().count;
+    vendorSearchObj.run().each(function(result){
+
+        var supplierId = result.getValue({
+            name: 'internalid',
+            summary: 'GROUP'
+        });
+
+        var fileId = result.getValue({
+            name: 'internalid',
+            join: 'file',
+            summary: 'GROUP'
+        });
+
+        fileArr.push({
+            'supplierId' : supplierId,
+            'fileId' : fileId
+        });
+        return true;
+    });
+
+    return fileArr;
+}
+
+function getSupplierAttachments(json, suppliersArr) {
+
+    var attachments = [];
+    for(var i in json){
+        for(var z in suppliersArr){
+            var supplierId = suppliersArr[z];
+            if(supplierId == json[i].supplierId){
+                attachments.push(json[i].fileId);
+            }
+        }
+    }
+    return attachments;
 }
 
 function getTransactionAttachments(json, transactionId) {

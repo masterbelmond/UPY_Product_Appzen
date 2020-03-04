@@ -42,6 +42,10 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 name: 'custscript_appzen_sftp_dir_supplier'
             });
 
+            var paramAppzenSFTP_contracts_folder = scriptObj.getParameter({
+                name: 'custscript_appzen_sftp_dir_contracts'
+            });
+
             log.debug({
                 title : 'COMPANY PREFERENCES',
                 details : 'Base URI: ' + paramBaseURI + ' | Supplier Endpoint: ' + paramSupplierEndpoint + ' | Supplier Search: ' + paramSupplierSearch + ' | Customer ID: ' + paramAppzenCustomerID + ' | SFTP URL: ' + paramAppzenSFTP_URL + ' SFTP username: ' + paramAppzenSFTP_username + ' | SFTP dir: ' + paramAppzenSFTP_dir + ' | Integration folder: ' + paramAppzenSFTP_integration_folder
@@ -107,6 +111,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             var suppliersArr = [];
             var addressArr = [];
             var contactArr = [];
+            var supplierIds = [];
 
             //region SUPPLIER SEARCH
             var searchSupplier = search.load({
@@ -118,6 +123,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                 var columns = result.columns;
                 var internalid = result.id;
+                supplierIds.push(internalid);
 
                 //external_site_id
                 var addressinternalid = result.getValue({
@@ -439,6 +445,26 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
             //endregion FILE
 
+            //region Contracts
+            var fileAttachments = getVendorAttachments(search);
+            if(!isBlank(fileAttachments && !isBlank(suppliersArr))){
+                var fileArr = getSupplierAttachments(fileAttachments, supplierIds);
+                if(!isBlank(fileArr)) {
+                    for (var f in fileArr) {
+                        var fileObj = file.load({
+                            id : fileArr[f]
+                        });
+                        var fileName = fileObj.name;
+                        myConn.upload({
+                            directory: paramAppzenSFTP_dir + paramAppzenSFTP_contracts_folder,
+                            filename: fileName,
+                            file: fileObj,
+                            replaceExisting: true
+                        });
+                    }
+                }
+            }
+            //endregion Contracts
 
             if(IS_LOG_ON) {
 
