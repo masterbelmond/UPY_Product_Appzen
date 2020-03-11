@@ -511,15 +511,22 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 }
 
                 //lines.item_description
-                var lines_item_description = result.getValue({
-                    name : 'salesdescription',
-                    join: 'item'
+                var lines_item_description = result.getText({
+                    name : 'item'
                 });
 
                 //lines.quantity
                 var lines_quantity = result.getValue({
                     name : 'quantity'
                 });
+
+                if(isBlank(lines_item_description)){
+                    lines_item_description = result.getText({
+                        name : 'expensecategory'
+                    });
+
+                    lines_quantity = parseInt(1);
+                }
 
                 if(!isBlank(lines_quantity)) {
                     lines_quantity = parseInt(lines_quantity);
@@ -595,6 +602,12 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     name : 'statusref'
                 });
 
+                //lines.external_purchase_order_number
+                var lines_external_purchase_order_number = result.getValue({
+                    name : 'tranid',
+                    join: 'appliedToTransaction'
+                });
+
                 //endregion Lines
 
 
@@ -602,6 +615,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 lines.push({
                     'external_line_number' : lines_external_line_number,
                     'line_number' : lines_line_number,
+                    'external_purchase_order_number' : lines_external_purchase_order_number,
                     'item_description' : lines_item_description,
                     'quantity' : lines_quantity,
                     'unit_price' : lines_unit_price,
@@ -615,6 +629,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     'external_supplier_id' : external_supplier_id,
                     'invoice_date' : invoice_date,
                     'accounting-date' : accounting_date,
+                    'external_purchase_order_number' : lines_external_purchase_order_number,
                     'document_type' : document_type,
                     'payment_term' : payment_term,
                     'payment_status' : lines_external_status,
@@ -670,7 +685,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 //region Create a File
                 var fileName = _dataArr[z].external_invoice_id + '_' + TIMESTAMP + '.json';
                 var _data = {};
-                _data.invoices = _dataArr[z];
+                var tempData = [];
+                tempData.push(_dataArr[z]);
+                _data.invoices = tempData;
                 var contents = JSON.stringify(_data);
                 var fileId = createFile(file, fileName, contents, paramAppzenSFTP_integration_folder);
 
@@ -709,6 +726,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             }
 
             //region Create Trigger File
+
             var fileName = ISO_DATE_FOLDER + '.trigger';
             var _data = '';
             var fileTrigger = createFile(file, fileName, _data, paramAppzenSFTP_integration_folder);
@@ -722,12 +740,15 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 file: loadFile,
                 replaceExisting: true
             });
+
             //endregion Create Trigger File
 
             postData.push(_data);
             //endregion GROUP Lines
 
             //endregion POST DATA
+
+            /*
             var appzenResponse = https.post({
                 url : ENDPOINT,
                 body : postData
@@ -749,6 +770,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                 generateLog(record, _log);
             }
+            */
         }
 
         return {

@@ -4,9 +4,9 @@
  * @NModuleScope SameAccount
  */
 
-define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/file', 'N/http', 'N/https', 'N/keyControl', 'N/sftp', './Appzen_Integration_library.js'],
+define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/file', 'N/http', 'N/https', 'N/keyControl', 'N/sftp', 'N/task', './Appzen_Integration_library.js'],
 
-    function (record, search, log, email, runtime, error, file, http, https, keyControl, sftp) {
+    function (record, search, log, email, runtime, error, file, http, https, keyControl, sftp, task) {
 
         function execute() {
 
@@ -114,15 +114,31 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             var supplierIds = [];
 
             //region SUPPLIER SEARCH
+
+            var runTimeContext = runtime.getCurrentScript();
+            var supplierId = runTimeContext.getParameter('custscript_search_supplier_id');
+
             var searchSupplier = search.load({
                 id: paramSupplierSearch
             });
 
+            if(!isBlank(supplierId)){
+                var internalIdFilter = search.createFilter({
+                    name: 'internalidnumber',
+                    operator: 'greaterthan',
+                    values: supplierId
+                });
+
+                searchSupplier.filters.push(internalIdFilter);
+            }
+
             var resultSet = searchSupplier.run();
+
             searchSupplier.run().each(function(result){
 
                 var columns = result.columns;
                 var internalid = result.id;
+
                 supplierIds.push(internalid);
 
                 //external_site_id
@@ -220,6 +236,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 id: 'customsearch_upy_vendor_address_search'
             });
             var addressResultSet = searchAddress.run();
+
             searchAddress.run().each(function(result){
 
                 var columns = result.columns;
@@ -386,13 +403,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
             postData.suppliers = _data;
 
-            var appzenResponse = https.post({
-                url : ENDPOINT,
-                body : postData
-            });
-            var code = appzenResponse.code;
-            var body = JSON.stringify(appzenResponse.body);
-
             //endregion POST DATA
 
             //region FILE
@@ -466,6 +476,16 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             }
             //endregion Contracts
 
+            /*
+            var appzenResponse = https.post({
+                url : ENDPOINT,
+                body : postData
+            });
+            var code = appzenResponse.code;
+            var body = JSON.stringify(appzenResponse.body);
+            */
+
+            /*
             if(IS_LOG_ON) {
 
                 var _log = {
@@ -479,7 +499,28 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                 generateLog(record, _log);
             }
+            */
+        }
 
+        function rescheduleScript(id){
+
+            var usage = runtime.getCurrentScript().getRemainingUsage();
+            log.debug({
+                title : 'USAGE',
+                details : usage
+            });
+            if (usage <= 1000)
+            {
+                var scriptTask = task.create({
+                    taskType: task.TaskType.SCHEDULED_SCRIPT
+                });
+                scriptTask.scriptId = runtime.getCurrentScript().id;
+                scriptTask.deploymentId = runtime.getCurrentScript().deploymentId;
+                scriptTask.params = {
+                    'custscript_search_supplier_id' : id
+                }
+                return scriptTask.submit();
+            }
         }
         
         return {

@@ -108,7 +108,8 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
             //region POST DATA
             var postData = [];
-
+            var files = [];
+            var purchaseOrderArr = [];
             var _data = [];
             var addressArr = [];
             var contactArr = [];
@@ -123,8 +124,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             var resultSet = searchSupplier.run();
 
             searchSupplier.run().each(function(result){
-
-                var purchaseOrderArr = [];
 
                 var columns = result.columns;
                 var internalid = result.id;
@@ -275,7 +274,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                 var attachmentsBase64 = [];
 
-                var files = getTransactionAttachments(fileAttachments, internalid);
+                files = getTransactionAttachments(fileAttachments, internalid);
                 if(!isBlank(files)) {
                     for (var f in files) {
                         var fileObj = file.load({
@@ -322,10 +321,23 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 }
 
                 //lines.item_description
-                var lines_item_description = result.getValue({
-                    name : 'salesdescription',
-                    join: 'item'
+                var lines_item_description = result.getText({
+                    name : 'item'
                 });
+
+                //lines.quantity
+                var lines_quantity = result.getValue({
+                    name : 'quantity'
+                });
+
+                if(isBlank(lines_item_description)){
+
+                    lines_item_description = result.getText({
+                        name : 'expensecategory'
+                    });
+
+                    lines_quantity = parseInt(1);
+                }
 
                 //lines.unit_of_measure
                 var lines_unit_of_measure = result.getValue({
@@ -366,11 +378,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 commited_amount.currency_code = commited_amountcurrency;
 
                 //endregion commited_amount
-
-                //lines.quantity
-                var lines_quantity = result.getValue({
-                    name : 'quantity'
-                });
 
                 if(!isBlank(lines_quantity)) {
                     lines_quantity = parseInt(lines_quantity);
@@ -458,17 +465,55 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     'attachmentsBase64' : attachmentsBase64
                 });
 
-                //Create a File
-                var fileName = INTERNAL_ID + '_' + TIMESTAMP + '.json';
+                return true;
+            });
+
+            //endregion PURCHASE ORDER SEARCH
+
+            var payloadGrouped = groupBy(purchaseOrderArr, 'external_purchase_order_number');
+            log.debug('payload PO', JSON.stringify(payloadGrouped));
+
+            var _dataArr = [];
+
+            for(var i in payloadGrouped){
+
+                var purchaseOrderArrTemp = payloadGrouped[i].data;
+
+                if(purchaseOrderArrTemp.length > 1){
+                    //multiple lines
+                    var mainArr = purchaseOrderArrTemp[0];
+                    for(var t in purchaseOrderArrTemp){
+
+                        if(parseInt(t) != 0) {
+                            mainArr.lines.push(purchaseOrderArrTemp[t].lines[0]);
+                        }
+                    }
+                    _dataArr.push(mainArr);
+                }
+                else{
+                    _dataArr.push(purchaseOrderArrTemp[0]);
+                }
+            }
+
+            log.debug('_dataArr', JSON.stringify(_dataArr));
+
+            for(var z in _dataArr){
+
+                //region Create a File
+                var fileName = _dataArr[z].external_purchase_order_number + '_' + TIMESTAMP + '.json';
                 var _data = {};
-                _data.purchaseOrders = purchaseOrderArr;
+                var tempData = [];
+                tempData.push(_dataArr[z]);
+                _data.purchaseOrders = tempData;
                 var contents = JSON.stringify(_data);
                 var fileId = createFile(file, fileName, contents, paramAppzenSFTP_integration_folder);
 
                 var loadFile = file.load({
                     id : fileId
                 });
+                //endregion Create a File
 
+                //region Upload a File
                 myConn.upload({
                     directory: ftpRelativePath + isoDateFolder,
                     filename: fileName,
@@ -494,37 +539,33 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                     }
                 }
+                //endregion Upload a File
+            }
 
-                //region Create Trigger File
-                var fileName = ISO_DATE_FOLDER + '.trigger';
-                var _data = '';
-                var fileTrigger = createFile(file, fileName, _data, paramAppzenSFTP_integration_folder);
-                var loadFile = file.load({
-                    id : fileTrigger
-                });
-
-                myConn.upload({
-                    directory: ftpRelativePath,
-                    filename: fileName,
-                    file: loadFile,
-                    replaceExisting: true
-                });
-                //endregion Create Trigger File
-
-                postData.push(purchaseOrderArr);
-
-                return true;
+            //region Create Trigger File
+            var fileName = ISO_DATE_FOLDER + '.trigger';
+            var _data = '';
+            var fileTrigger = createFile(file, fileName, _data, paramAppzenSFTP_integration_folder);
+            var loadFile = file.load({
+                id : fileTrigger
             });
 
-            //endregion PURCHASE ORDER SEARCH
+            myConn.upload({
+                directory: ftpRelativePath,
+                filename: fileName,
+                file: loadFile,
+                replaceExisting: true
+            });
 
-            //endregion POST DATA
+            //endregion Create Trigger File
 
+            postData.push(_data);
+
+            /*
             var appzenResponse = https.post({
                 url : ENDPOINT,
                 body : postData
             });
-
             var code = appzenResponse.code;
             var body = JSON.stringify(appzenResponse.body);
 
@@ -541,6 +582,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                 generateLog(record, _log);
             }
+             */
         }
 
         return {

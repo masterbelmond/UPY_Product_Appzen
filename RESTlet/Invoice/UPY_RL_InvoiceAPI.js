@@ -429,15 +429,22 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                 }
 
                 //lines.item_description
-                var lines_item_description = result.getValue({
-                    name : 'salesdescription',
-                    join: 'item'
+                var lines_item_description = result.getText({
+                    name : 'item'
                 });
 
                 //lines.quantity
                 var lines_quantity = result.getValue({
                     name : 'quantity'
                 });
+
+                if(isBlank(lines_item_description)){
+                    lines_item_description = result.getText({
+                        name : 'expensecategory'
+                    });
+
+                    lines_quantity = parseInt(1);
+                }
 
                 if(!isBlank(lines_quantity)) {
                     lines_quantity = parseInt(lines_quantity);
@@ -513,6 +520,12 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                     name : 'statusref'
                 });
 
+                //lines.external_purchase_order_number
+                var lines_external_purchase_order_number = result.getValue({
+                    name : 'tranid',
+                    join: 'appliedToTransaction'
+                });
+
                 //endregion Lines
 
 
@@ -520,6 +533,7 @@ define([ 'N/log', 'N/record', 'N/search', 'N/runtime', './Appzen_Integration_lib
                 lines.push({
                     'external_line_number' : lines_external_line_number,
                     'line_number' : lines_line_number,
+                    'external_purchase_order_number' : lines_external_purchase_order_number,
                     'item_description' : lines_item_description,
                     'quantity' : lines_quantity,
                     'unit_price' : lines_unit_price,

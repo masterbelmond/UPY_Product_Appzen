@@ -176,6 +176,7 @@ function getTransactionAttachments(json, transactionId) {
 }
 
 function createFile(file, fileName, contents, folder) {
+
     var fileObj = file.create({
         name: fileName,
         fileType: file.Type.PLAINTEXT,
@@ -185,6 +186,19 @@ function createFile(file, fileName, contents, folder) {
 
     var id = fileObj.save();
     return id;
+}
+
+function createFileObj(file, fileName, contents, folder) {
+
+    var fileObj = file.create({
+        name: fileName,
+        fileType: file.Type.PLAINTEXT,
+        contents: contents,
+        folder : folder
+    });
+
+    var id = fileObj.save();
+    return fileObj;
 }
 
 function createSftpConnection(sftp, user, url, hostKey, keyId){
