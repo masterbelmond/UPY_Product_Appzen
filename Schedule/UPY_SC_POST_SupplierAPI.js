@@ -269,7 +269,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             if(!isBlank(supplierId)){
                 var internalIdFilter = search.createFilter({
                     name: 'internalidnumber',
-                    operator: 'greaterthan',
+                    operator: 'greaterthanorequalto',
                     values: supplierId
                 });
 
