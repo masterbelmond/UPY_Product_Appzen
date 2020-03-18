@@ -195,7 +195,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     'address_type' : address_type,
                     'address_line1' : address_line1,
                     'address_line2' : address_line2,
-                    'address_line3' : address_line2,
+                    'address_line3' : address_line3,
                     'city' : city,
                     'state': state,
                     'zip' : zip,
@@ -203,6 +203,10 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     'phone' : phone
                 });
                 return true;
+            });
+            log.debug({
+                title : 'ADDRESS ARR',
+                details : JSON.stringify(addressArr)
             });
 
             //endregion ADDRESS SEARCH
@@ -289,10 +293,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 else {
 
                     supplierIds.push(internalid);
-                    //external_site_id
-                    var addressinternalid = result.getValue({
-                        name: 'addressinternalid'
-                    });
 
                     //isperson
                     var isperson = result.getValue({
@@ -346,9 +346,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     var is_active;
                     var deactive_date;
                     if (is_inactive) {
-                        is_active = "true";
-                    } else {
                         is_active = "false";
+                    } else {
+                        is_active = "true";
                     }
 
                     //note
@@ -358,7 +358,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                     suppliersArr.push({
                         'external_supplier_id': internalid,
-                        'external_site_id': addressinternalid,
+                        'external_site_id': '',
                         'supplier_name': supplier_name,
                         'web_site': url,
                         'on_file_1099': on_file_1099,
@@ -456,7 +456,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             //endregion FILE
 
             //region Contracts
-            /**
+
              var fileAttachments = getVendorAttachments(search);
              if(!isBlank(fileAttachments && !isBlank(suppliersArr))){
                 var fileArr = getSupplierAttachments(fileAttachments, supplierIds);
@@ -475,7 +475,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     }
                 }
             }
-             **/
+
             //endregion Contracts
 
             /*

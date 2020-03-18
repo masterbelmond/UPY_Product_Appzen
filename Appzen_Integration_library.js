@@ -1,5 +1,22 @@
 //region FUNCTIONS
 
+function rescheduleScriptNextBatch(id, task, runtime){
+
+    var scriptTask = task.create({
+        taskType: task.TaskType.SCHEDULED_SCRIPT
+    });
+    scriptTask.scriptId = runtime.getCurrentScript().id;
+    scriptTask.deploymentId = runtime.getCurrentScript().deploymentId;
+    scriptTask.params = {
+        'custscript_search_batch_invoice_id' : id
+    }
+    var scriptStat = scriptTask.submit();
+    log.debug({
+        title : 'RESCHEDULED',
+        details : 'Parameter: ' + id
+    });
+}
+
 function groupBy(arr, key) {
     var newArr = [],
         types = {},
@@ -37,6 +54,72 @@ var loggerJSON = function(log, msg, str) {
     }
 };
 
+function getAttachmentsById(search, id) {
+
+    var fileArr = [];
+
+    var transactionSearchObj = search.create({
+        type: 'transaction',
+        filters:
+            [
+                ['type','anyof','VendBill','VendCred','PurchOrd'],
+                'AND',
+                ['file.internalid','noneof','@NONE@'],
+                'AND',
+                ['internalid','anyof', id]
+            ],
+        columns:
+            [
+                search.createColumn({
+                    name: 'internalid',
+                    summary: 'GROUP',
+                    label: 'Internal ID'
+                }),
+                search.createColumn({
+                    name: 'type',
+                    summary: 'GROUP',
+                    label: 'Type'
+                }),
+                search.createColumn({
+                    name: 'internalid',
+                    join: 'file',
+                    summary: 'GROUP',
+                    label: 'Internal ID'
+                })
+            ]
+    });
+
+    transactionSearchObj.run().each(function(result){
+        // .run().each has a limit of 4,000 results
+
+        var transactionId = result.getValue({
+            name: 'internalid',
+            summary: 'GROUP'
+        });
+
+        var transactionType = result.getValue({
+            name: 'type',
+            summary: 'GROUP'
+        });
+
+        var fileId = result.getValue({
+            name: 'internalid',
+            join: 'file',
+            summary: 'GROUP'
+        });
+
+        fileArr.push({
+            'transactionId' : transactionId,
+            'transactionType' : transactionType,
+            'fileId' : fileId
+        });
+
+        return true;
+    });
+
+    return fileArr;
+}
+
 function getAttachments(search) {
 
     var fileArr = [];
@@ -69,7 +152,7 @@ function getAttachments(search) {
                 })
             ]
     });
-    var searchResultCount = transactionSearchObj.runPaged().count;
+
     transactionSearchObj.run().each(function(result){
         // .run().each has a limit of 4,000 results
 
@@ -101,7 +184,7 @@ function getAttachments(search) {
     return fileArr;
 }
 
-function getVendorAttachments(search){
+function getVendorAttachments(search, supplierId){
 
     var fileArr = [];
 
@@ -126,7 +209,17 @@ function getVendorAttachments(search){
                 })
             ]
     });
-    var searchResultCount = vendorSearchObj.runPaged().count;
+
+    if (!isBlank(supplierId)) {
+        var internalIdFilter = search.createFilter({
+            name: 'internalidnumber',
+            operator: 'greaterthan',
+            values: supplierId
+        });
+
+        vendorSearchObj.filters.push(internalIdFilter);
+    }
+
     vendorSearchObj.run().each(function(result){
 
         var supplierId = result.getValue({
