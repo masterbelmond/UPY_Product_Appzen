@@ -1,4 +1,7 @@
 /**
+ * Name : UPY | SC | POST Invoice API
+ * ID : customscript_upy_sc_post_invoiceapi
+ * Link : https://5432907-sb1.app.netsuite.com/app/common/scripting/script.nl?id=317
  * @NApiVersion 2.x
  * @NScriptType ScheduledScript
  * @NModuleScope SameAccount
@@ -23,11 +26,11 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 var paramAppzenCustomerID = scriptObj.getParameter({
                     name: 'custscript_appzen_customer_id'
                 });
-                var paramPurchaseOrderEndpoint = scriptObj.getParameter({
-                    name: 'custscript_appzen_purch_ord_endpoint'
+                var paramInvoiceEndpoint = scriptObj.getParameter({
+                    name: 'custscript_appzen_invoice_endpoint'
                 });
-                var paramPurchaseOrderSearch = scriptObj.getParameter({
-                    name: 'custscript_appzen_purch_ord_search'
+                var paramInvoiceSearch = scriptObj.getParameter({
+                    name: 'custscript_appzen_invoice_search'
                 });
 
                 var paramAppzenSFTP_URL = scriptObj.getParameter({
@@ -44,7 +47,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 });
 
                 var paramAppzenSFTP_invoice_folder = scriptObj.getParameter({
-                    name: 'custscript_appzen_sftp_dir_purch_ord'
+                    name: 'custscript_appzen_sftp_dir_invoice'
                 });
 
                 var paramAppzenBatch_Limit = scriptObj.getParameter({
@@ -54,13 +57,13 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                 //region USER PREFERENCES
                 var IS_LOG_ON = scriptObj.getParameter({
-                    name: 'custscript_appzen_sc_purch_ord_logs'
+                    name: 'custscript_appzen_sc_invoice_logs'
                 });
                 //endregion USER PREFERENCES
 
                 //region GLOBAL VAR
-                var URI = paramBaseURI + paramPurchaseOrderEndpoint;
-                var TYPE = 'type=purchaseorder';
+                var URI = paramBaseURI + paramInvoiceEndpoint;
+                var TYPE = 'type=invoice';
                 var NETSUITE_CUSTOMER_ID = '&customer_id=' + paramAppzenCustomerID;
                 var ENDPOINT = URI + TYPE + NETSUITE_CUSTOMER_ID;
                 var TIMESTAMP = new Date().getTime();
@@ -119,25 +122,27 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                 var fileAttachments = getAttachments(search);
 
+                var runTimeContext = runtime.getCurrentScript();
+                var invoiceId = runTimeContext.getParameter('custscript_search_invoice_id');
+
                 //region INVOICE SEARCH
 
-                var PURCHASE_ORDER_ARR = [];
                 var COUNT = parseInt(1);
                 var INTERNAL_ID = '';
 
                 var runTimeContext = runtime.getCurrentScript();
-                var purchaseOrderId = runTimeContext.getParameter('custscript_search_batch_purch_ord_id');
+                var invoiceId = runTimeContext.getParameter('custscript_search_batch_invoice_id');
 
                 var searchInvoice = search.load({
-                    id: 'customsearch_upy_purchord_header_search'
+                    id: paramInvoiceSearch
                 });
 
-                if (!isBlank(purchaseOrderId)) {
+                if (!isBlank(invoiceId)) {
 
                     var internalIdFilter = search.createFilter({
                         name: 'internalidnumber',
                         operator: 'greaterthan',
-                        values: purchaseOrderId
+                        values: invoiceId
                     });
 
                     searchInvoice.filters.push(internalIdFilter);
@@ -145,22 +150,25 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                 searchInvoice.run().each(function (result) {
 
+                    var INVOICE_ARR = [];
                     var columns = result.columns;
                     var internalid = result.id;
                     INTERNAL_ID = internalid;
 
-                    var purchaseOrderArr = [];
+                    var invoiceArr = [];
 
                     var isResched = rescheduleScript(internalid, myConn, ftpRelativePath, ISO_DATE_FOLDER, paramAppzenSFTP_integration_folder);
                     if (!isResched) {
                         return;
                     } else {
 
-                        //external_purchase_order_id
-                        var external_purchase_order_number = internalid;
+                        //external_invoice_id
+                        var external_invoice_id = result.getValue({
+                            name: 'internalid'
+                        });
 
                         //external_invoice_number
-                        //var external_purchase_order_number = result.getValue(columns[1]);
+                        var external_invoice_number = result.getValue(columns[1]);
 
                         //external_supplier_id
                         var external_supplier_id = result.getValue({
@@ -195,8 +203,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                         if (!isBlank(searchFields.duedate)) {
                             due_date = new Date(searchFields.duedate).toISOString();
-                        } else {
-                            due_date = '';
                         }
 
                         var payment_term = {};
@@ -212,7 +218,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 id: terms
                             });
                             payment_term.code = '';
-                            payment_term.date = due_date;
+                            payment_term.date = invoice_date;
                             payment_term.source = objTerms.getValue({
                                 fieldId: 'name'
                             });
@@ -266,7 +272,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                             var _total = {};
 
                             var total = result.getValue({
-                                name: 'fxamountpaid'
+                                name: 'fxamount'
                             });
                             if (!isBlank(total)) {
                                 total = parseFloat(total);
@@ -292,6 +298,19 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                             payment_term.discount = discount;
                         }
 
+                        //document_type
+                        var document_type = result.getValue({
+                            name: 'type'
+                        });
+
+                        if (!isBlank(document_type)) {
+                            if (document_type == 'VendBill') {
+                                document_type = 'invoice';
+                            } else if (document_type == 'VendCred') {
+                                document_type = 'credit note';
+                            }
+                        }
+
                         //payment_status
                         var payment_status = result.getValue({
                             name: 'statusref'
@@ -310,8 +329,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                         //total.amount
                         var total = result.getValue({
-                            name: "formulacurrency",
-                            formula: "{fxamount}"
+                            name: 'fxamount'
                         });
                         if (!isBlank(total)) {
                             total = parseFloat(total);
@@ -429,11 +447,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                             lines_line_number = parseInt(lines_line_number);
                         }
 
-                        //lines.external_purchase_order_number
-                        var lines_external_purchase_order_number = result.getValue({
-                            name: 'tranid',
-                            join: 'appliedToTransaction'
-                        });
 
                         var ship_to_address = {};
 
@@ -555,12 +568,11 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         bill_to_address.country = bill_to_address_country;
                         bill_to_address.phone = bill_to_address_phone;
 
-
                         //region LINES
                         var lines = [];
 
-                        var searchPurchaseOrderLines = search.load({
-                            id: 'customsearch_upy_purchord_lines_search'
+                        var searchInvoiceLines = search.load({
+                            id: 'customsearch_upy_invoice_lines_search'
                         });
 
                         if (!isBlank(internalid)) {
@@ -570,19 +582,21 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 values: internalid
                             });
 
-                            searchPurchaseOrderLines.filters.push(internalIdLinesFilter);
+                            searchInvoiceLines.filters.push(internalIdLinesFilter);
 
                         }
 
-                        searchPurchaseOrderLines.run().each(function (resultLines) {
+                        var lines_external_purchase_order_number = '';
 
-                            var lines_external_line_id = resultLines.getValue({
-                                name: 'lineuniquekey'
-                            });
+                        searchInvoiceLines.run().each(function (resultLines) {
 
+                            var columns = resultLines.columns;
+                            var internalid = resultLines.id;
+
+                            //region Lines
                             //lines.external_line_number
                             var lines_external_line_number = resultLines.getValue({
-                                name: 'line'
+                                name: 'lineuniquekey'
                             });
 
                             //lines.line_number
@@ -592,17 +606,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                             if (!isBlank(lines_line_number)) {
                                 lines_line_number = parseInt(lines_line_number);
-                            }
-
-                            //lines.item
-                            var lines_item = resultLines.getValue({
-                                name: 'item'
-                            });
-
-                            if (!isBlank(lines_item)) {
-                                lines_item = parseInt(lines_item);
-                            } else {
-                                lines_item = parseInt(0);
                             }
 
                             //lines.item_description
@@ -616,51 +619,18 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                             });
 
                             if (isBlank(lines_item_description)) {
-
                                 lines_item_description = resultLines.getText({
                                     name: 'expensecategory'
                                 });
-
                                 lines_quantity = parseInt(1);
                             }
 
-                            //lines.unit_of_measure
-                            var lines_unit_of_measure = resultLines.getValue({
-                                name: 'unit'
-                            });
-
-                            //lines.committedquantity
-                            var lines_committedquantity = resultLines.getValue({
-                                name: 'quantitycommitted'
-                            });
-
-                            if (!isBlank(lines_committedquantity)) {
-                                lines_committedquantity = parseInt(lines_committedquantity);
-                            } else {
-                                lines_committedquantity = parseInt(0);
+                            if (isBlank(lines_item_description)) {
+                                lines_item_description = resultLines.getText({
+                                    name: 'account'
+                                });
+                                lines_quantity = parseInt(1);
                             }
-
-                            //region commited_amount
-                            var commited_amount = {};
-
-                            //lines.commited_amount.amount
-                            var commited_amount_amount = resultLines.getValue({
-                                name: 'amount'
-                            });
-                            if (!isBlank(commited_amount_amount)) {
-                                commited_amount_amount = parseFloat(commited_amount_amount);
-                            } else {
-                                commited_amount_amount = parseInt(0);
-                            }
-                            //lines.commited_amount.currency_code
-                            var commited_amountcurrency = resultLines.getText({
-                                name: 'currency'
-                            });
-
-                            commited_amount.amount = commited_amount_amount;
-                            commited_amount.currency_code = commited_amountcurrency;
-
-                            //endregion commited_amount
 
                             if (!isBlank(lines_quantity)) {
                                 lines_quantity = parseInt(lines_quantity);
@@ -668,69 +638,93 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 lines_quantity = parseInt(0);
                             }
 
-                            //region amount
-                            var amount = {};
-
-                            //lines.amount.amount
-                            var amount_amount = resultLines.getValue({
-                                name: 'amount'
-                            });
-                            if (!isBlank(amount_amount)) {
-                                amount_amount = parseFloat(amount_amount);
-                            } else {
-                                amount_amount = parseFloat(0.00);
-                            }
-                            //lines.amount.currency_code
-                            var amount_currency_code = resultLines.getText({
-                                name: 'currency'
+                            //lines.unit_of_measure
+                            var lines_unit_of_measure = resultLines.getValue({
+                                name: 'unit'
                             });
 
-                            amount.amount = amount_amount;
-                            amount.currency_code = amount_currency_code;
-
-                            //endregion amount
-
-                            //region unit_list_price
-                            var base_unit_price = {};
+                            //region unit_price
+                            var lines_unit_price = {};
 
                             //lines.base_unit_price.amount
-                            var base_unit_price_amount = resultLines.getValue({
-                                name: 'baseprice',
-                                join: 'item'
+                            var lines_unit_price_amount = resultLines.getValue({
+                                name: "formulacurrency",
+                                formula: "{fxamount}/ NULLIF({quantity},0)"
                             });
 
-                            if (!isBlank(base_unit_price_amount)) {
-                                base_unit_price_amount = parseFloat(base_unit_price_amount);
+                            if (!isBlank(lines_unit_price_amount)) {
+                                lines_unit_price_amount = parseFloat(lines_unit_price_amount);
                             } else {
-                                base_unit_price_amount = parseFloat(0.00);
+                                var lines_total_price_amount = resultLines.getValue({
+                                    name: "formulacurrency",
+                                    formula: "{fxamount}/ NULLIF({quantity},0)"
+                                });
+                                lines_unit_price_amount = parseFloat(lines_total_price_amount)
                             }
 
                             //lines.unit_list_price.currency_code
-                            var base_unit_price_currency_code = resultLines.getText({
+                            var lines_unit_price_currency_code = resultLines.getText({
                                 name: 'currency'
                             });
 
-                            base_unit_price.amount = base_unit_price_amount;
-                            base_unit_price.currency_code = base_unit_price_currency_code;
+                            lines_unit_price.amount = lines_unit_price_amount;
+                            lines_unit_price.currency_code = lines_unit_price_currency_code;
 
-                            //endregion unit_list_price
+                            //endregion unit_price
+
+                            //region total_price
+                            var lines_total_price = {};
+
+                            //lines.base_unit_price.amount
+                            var lines_total_price_amount = resultLines.getValue({
+                                name: "formulacurrency",
+                                formula: "{fxamount}/{exchangerate}"
+                            });
+
+                            if (!isBlank(lines_total_price_amount)) {
+                                lines_total_price_amount = parseFloat(lines_total_price_amount);
+                            } else {
+                                lines_total_price_amount = parseFloat(0.00);
+                            }
+
+                            //lines.unit_list_price.currency_code
+                            var lines_total_price_currency_code = resultLines.getText({
+                                name: 'currency'
+                            });
+
+                            lines_total_price.amount = lines_total_price_amount;
+                            lines_total_price.currency_code = lines_total_price_currency_code;
+
+                            //endregion unit_price
+
+                            //lines.unit_of_measure
+                            var lines_unit_of_measure = resultLines.getValue({
+                                name: 'unit'
+                            });
+
+                            //lines.external_status
+                            var lines_external_status = resultLines.getValue({
+                                name: 'statusref'
+                            });
+
+                            //lines.external_purchase_order_number
+                            lines_external_purchase_order_number = resultLines.getValue({
+                                name: 'tranid',
+                                join: 'appliedToTransaction'
+                            });
 
                             //endregion Lines
 
                             lines.push({
-                                'external_line_id': lines_external_line_id,
                                 'external_line_number': lines_external_line_number,
                                 'line_number': lines_line_number,
-                                'org_id': org_id,
-                                'org_name': org_name,
-                                'item_id': lines_item,
+                                'external_purchase_order_number': lines_external_purchase_order_number,
                                 'item_description': lines_item_description,
-                                'unit_of_measure': lines_unit_of_measure,
-                                'commited_quantity': lines_committedquantity,
-                                'commited_amount': commited_amount,
                                 'quantity': lines_quantity,
-                                'amount': amount,
-                                'base_unit_price': base_unit_price
+                                'unit_price': lines_unit_price,
+                                'total_price': lines_total_price,
+                                'unit_of_measure': lines_unit_of_measure,
+                                'external_status': lines_external_status
                             });
 
                             return true;
@@ -739,55 +733,58 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                         //endregion LINES
 
-                        purchaseOrderArr.push({
-                            'external_purchase_order_number': external_purchase_order_number,
+                        invoiceArr.push({
+                            'external_invoice_id': external_invoice_id,
+                            'external_invoice_number': external_invoice_number,
                             'external_supplier_id': external_supplier_id,
-                            'payment_term': payment_term,
-                            'total': _total,
-                            'exchange_rate': exchange_rate,
+                            'invoice_date': invoice_date,
+                            'accounting-date': accounting_date,
+                            'external_purchase_order_number': lines_external_purchase_order_number,
+                            'document_type': document_type,
                             'org_id': org_id,
                             'org_name': org_name,
-                            'lines': lines,
-                            'attachmentsBase64': attachmentsBase64
+                            'requestor': requestor,
+                            'submitter': submitter,
+                            'payment_term': payment_term,
+                            'payment_status': lines_external_status,
+                            'payment_date': payment_date,
+                            'due_date': due_date,
+                            'total': _total,
+                            'attachmentsBase64': attachmentsBase64,
+                            'exchange_rate': exchange_rate,
+                            'bill_to_address': bill_to_address,
+                            'ship_to_address': ship_to_address,
+                            'external_status': external_status,
+                            'lines': lines
                         });
 
                         lines = [];
 
-                        PURCHASE_ORDER_ARR.push(purchaseOrderArr[0]);
+                        INVOICE_ARR.push(invoiceArr[0]);
+                        var postData = {};
+                        postData.invoices = INVOICE_ARR;
 
-                        if (COUNT < paramAppzenBatch_Limit) {
-                            COUNT++;
-                            return true;
-                        } else {
-                            rescheduleScriptNextBatch(internalid, task, runtime);
+                        if (IS_SERVER_FILE) {
+
+                            var fileName = INTERNAL_ID + '_' + TIMESTAMP + '.json';
+                            var fileId = createFile(file, fileName, JSON.stringify(postData), paramAppzenSFTP_integration_folder);
+
+                            var loadFile = file.load({
+                                id: fileId
+                            });
+
+                            myConn.upload({
+                                directory: ftpRelativePath + isoDateFolder,
+                                filename: fileName,
+                                file: loadFile,
+                                replaceExisting: true
+                            });
                         }
+
+                        return true;
                     }
 
                 });
-
-                var postData = {};
-                postData.purchaseOrders = PURCHASE_ORDER_ARR;
-                log.debug({
-                    title: 'postData',
-                    details: JSON.stringify(postData)
-                });
-
-                if (IS_SERVER_FILE) {
-
-                    var fileName = INTERNAL_ID + '_' + TIMESTAMP + '.json';
-                    var fileId = createFile(file, fileName, JSON.stringify(postData), paramAppzenSFTP_integration_folder);
-
-                    var loadFile = file.load({
-                        id: fileId
-                    });
-
-                    myConn.upload({
-                        directory: ftpRelativePath + isoDateFolder,
-                        filename: fileName,
-                        file: loadFile,
-                        replaceExisting: true
-                    });
-                }
 
                 if (IS_TRIGGER_FILE) {
                     //region Create Trigger File
@@ -806,7 +803,10 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     });
                     //endregion Create Trigger File
                 }
+
+
                 //endregion INVOICE SEARCH
+
             }
             catch(ex){
                 log.error({

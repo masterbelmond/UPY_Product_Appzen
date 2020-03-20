@@ -119,9 +119,8 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                 var fileAttachments = getAttachments(search);
 
-                //region INVOICE SEARCH
+                //region PURCHASE ORDER SEARCH
 
-                var PURCHASE_ORDER_ARR = [];
                 var COUNT = parseInt(1);
                 var INTERNAL_ID = '';
 
@@ -145,6 +144,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                 searchInvoice.run().each(function (result) {
 
+                    var PURCHASE_ORDER_ARR = [];
                     var columns = result.columns;
                     var internalid = result.id;
                     INTERNAL_ID = internalid;
@@ -754,40 +754,31 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         lines = [];
 
                         PURCHASE_ORDER_ARR.push(purchaseOrderArr[0]);
+                        var postData = {};
+                        postData.purchaseOrders = PURCHASE_ORDER_ARR;
 
-                        if (COUNT < paramAppzenBatch_Limit) {
-                            COUNT++;
-                            return true;
-                        } else {
-                            rescheduleScriptNextBatch(internalid, task, runtime);
+                        if (IS_SERVER_FILE) {
+
+                            var fileName = INTERNAL_ID + '_' + TIMESTAMP + '.json';
+                            var fileId = createFile(file, fileName, JSON.stringify(postData), paramAppzenSFTP_integration_folder);
+
+                            var loadFile = file.load({
+                                id: fileId
+                            });
+
+                            myConn.upload({
+                                directory: ftpRelativePath + isoDateFolder,
+                                filename: fileName,
+                                file: loadFile,
+                                replaceExisting: true
+                            });
                         }
+
+                        return true;
+
                     }
 
                 });
-
-                var postData = {};
-                postData.purchaseOrders = PURCHASE_ORDER_ARR;
-                log.debug({
-                    title: 'postData',
-                    details: JSON.stringify(postData)
-                });
-
-                if (IS_SERVER_FILE) {
-
-                    var fileName = INTERNAL_ID + '_' + TIMESTAMP + '.json';
-                    var fileId = createFile(file, fileName, JSON.stringify(postData), paramAppzenSFTP_integration_folder);
-
-                    var loadFile = file.load({
-                        id: fileId
-                    });
-
-                    myConn.upload({
-                        directory: ftpRelativePath + isoDateFolder,
-                        filename: fileName,
-                        file: loadFile,
-                        replaceExisting: true
-                    });
-                }
 
                 if (IS_TRIGGER_FILE) {
                     //region Create Trigger File
@@ -806,7 +797,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     });
                     //endregion Create Trigger File
                 }
-                //endregion INVOICE SEARCH
+                //endregion PURCHASE ORDER SEARCH
             }
             catch(ex){
                 log.error({

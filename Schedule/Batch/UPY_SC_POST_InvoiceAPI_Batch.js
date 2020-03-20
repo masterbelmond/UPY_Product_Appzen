@@ -135,7 +135,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 var invoiceId = runTimeContext.getParameter('custscript_search_batch_invoice_id');
 
                 var searchInvoice = search.load({
-                    id: '214'
+                    id: 'customsearch_upy_invoice_header_search'
                 });
 
                 if (!isBlank(invoiceId)) {
@@ -147,9 +147,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     });
 
                     searchInvoice.filters.push(internalIdFilter);
-
-                    searchInvoice.filters.push(internalIdFilter);
-
                 }
 
                 searchInvoice.run().each(function (result) {
@@ -575,7 +572,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         var lines = [];
 
                         var searchInvoiceLines = search.load({
-                            id: '215'
+                            id: 'customsearch_upy_invoice_lines_search'
                         });
 
                         if (!isBlank(internalid)) {
