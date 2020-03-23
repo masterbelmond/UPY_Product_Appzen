@@ -14,6 +14,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
         function execute() {
 
             try {
+
+                var now = new Date();
+
                 var IS_SERVER_FILE = true;
                 var IS_TRIGGER_FILE = true;
 
@@ -302,12 +305,15 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         var document_type = result.getValue({
                             name: 'type'
                         });
+                        var recordType = '';
 
                         if (!isBlank(document_type)) {
                             if (document_type == 'VendBill') {
                                 document_type = 'invoice';
+                                recordType = 'vendorbill';
                             } else if (document_type == 'VendCred') {
                                 document_type = 'credit note';
+                                recordType = 'vendorcredit';
                             }
                         }
 
@@ -779,6 +785,28 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 file: loadFile,
                                 replaceExisting: true
                             });
+
+                            //Update Record
+                            if(!isBlank(recordType) && !isBlank(internalid)) {
+
+                                record.submitFields({
+                                    type: recordType,
+                                    id: internalid,
+                                    values: {
+                                        'custbody_appzen_last_modified': now
+                                    }
+                                });
+
+                                //Generate Logs
+                                if (internalid > 0) {
+                                    var _log = {};
+                                    _log.datetime = now;
+                                    _log.record_type = '-30';
+                                    _log.transaction = internalid;
+                                    _log.document = fileId;
+                                    generateLog(record, _log)
+                                }
+                            }
                         }
 
                         return true;

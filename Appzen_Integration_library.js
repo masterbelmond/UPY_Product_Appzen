@@ -355,13 +355,7 @@ function findFromArray(array,key,value) {
 function generateLog(record, _log){
 
     var req = _log.request;
-    var request = '';
-    if(!isBlank(req)) {
-        request = req.slice(0, 999);
-    }
-    else{
-        request = req;
-    }
+
     var logs = record.create({
         type: 'customrecord_appzen_integration_logs',
         isDynamic: true
@@ -373,28 +367,23 @@ function generateLog(record, _log){
     });
 
     logs.setValue({
-        fieldId: 'custrecord_appzen_request',
-        value: request
-    });
-
-    logs.setValue({
-        fieldId: 'custrecord_appzen_response',
-        value: _log.response
-    });
-
-    logs.setValue({
-        fieldId: 'custrecord_appzen_url',
-        value: _log.url
-    });
-
-    logs.setValue({
-        fieldId: 'custrecord_appzen_code',
-        value: _log.code
-    });
-
-    logs.setValue({
         fieldId: 'custrecord_appzen_netsuite_record_type',
         value: _log.record_type
+    });
+
+    logs.setValue({
+        fieldId: 'custrecord_appzen_file_json',
+        value: _log.document
+    });
+
+    logs.setValue({
+        fieldId: 'custrecord_appzen_vendor',
+        value: _log.supplier
+    });
+
+    logs.setValue({
+        fieldId: 'custrecord_appzen_transaction',
+        value: _log.transaction
     });
 
     try{

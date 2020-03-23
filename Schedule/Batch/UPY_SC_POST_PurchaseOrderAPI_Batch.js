@@ -11,6 +11,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
         function execute() {
 
             try {
+
+                var now = new Date();
+
                 var IS_SERVER_FILE = true;
                 var IS_TRIGGER_FILE = true;
 
@@ -754,6 +757,16 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         lines = [];
 
                         PURCHASE_ORDER_ARR.push(purchaseOrderArr[0]);
+
+                        if(!isBlank(internalid)) {
+                            record.submitFields({
+                                type: recordType,
+                                id: internalid,
+                                values: {
+                                    'custbody_appzen_last_modified': now
+                                }
+                            });
+                        }
 
                         if (COUNT < paramAppzenBatch_Limit) {
                             COUNT++;

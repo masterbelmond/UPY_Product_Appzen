@@ -1,7 +1,7 @@
 /**
  * Name : UPY | SC | POST Supplier API Batch
- * ID : customdeploy_upy_sc_post_supplierapi_v2
- * Link : https://5432907-sb1.app.netsuite.com/app/common/scripting/scriptrecord.nl?id=1360
+ * ID : customdeploy_upy_sc_post_supplierapi
+ * Link : https://5432907-sb1.app.netsuite.com/app/common/scripting/scriptrecord.nl?id=1341
  * @NApiVersion 2.x
  * @NScriptType ScheduledScript
  * @NModuleScope SameAccount
@@ -14,6 +14,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
         function execute() {
 
             try {
+
+                var now = new Date();
+
                 var IS_SERVER_FILE = true;
                 var IS_TRIGGER_FILE = true;
 
@@ -465,10 +468,11 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         });
 
                         var postData = {};
-                        postData.suppliers = SUPPLIERS_ARR;
+                        postData.suppliers = supplier;
+
                         log.debug({
                             title: 'SUPPLIERS ARR',
-                            details: JSON.stringify(postData)
+                            details: JSON.stringify(supplier)
                         });
 
                         if (IS_SERVER_FILE) {
@@ -486,6 +490,25 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 file: loadFile,
                                 replaceExisting: true
                             });
+
+                            //Update Record
+                            record.submitFields({
+                                type: search.Type.VENDOR,
+                                id: internalid,
+                                values: {
+                                    'custentity_appzen_last_modified': now
+                                }
+                            });
+
+                            //Generate Logs
+                            if(internalid > 0) {
+                                var _log = {};
+                                _log.datetime = now;
+                                _log.record_type = '-3';
+                                _log.supplier = internalid;
+                                _log.document = fileId;
+                                generateLog(record, _log)
+                            }
                         }
 
                         return true;

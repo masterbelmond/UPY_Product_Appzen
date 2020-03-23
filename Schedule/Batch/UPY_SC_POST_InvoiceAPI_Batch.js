@@ -14,6 +14,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
         function execute() {
 
             try {
+
+                var now = new Date();
+
                 var IS_SERVER_FILE = true;
                 var IS_TRIGGER_FILE = true;
 
@@ -303,11 +306,15 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                             name: 'type'
                         });
 
+                        var recordType = '';
+
                         if (!isBlank(document_type)) {
                             if (document_type == 'VendBill') {
                                 document_type = 'invoice';
+                                recordType = 'vendorbill';
                             } else if (document_type == 'VendCred') {
                                 document_type = 'credit note';
+                                recordType = 'vendorcredit';
                             }
                         }
 
@@ -761,6 +768,16 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         lines = [];
 
                         INVOICE_ARR.push(invoiceArr[0]);
+
+                        if(!isBlank(recordType)) {
+                            record.submitFields({
+                                type: recordType,
+                                id: internalid,
+                                values: {
+                                    'custbody_appzen_last_modified': now
+                                }
+                            });
+                        }
 
                         if (COUNT < paramAppzenBatch_Limit) {
                             COUNT++;

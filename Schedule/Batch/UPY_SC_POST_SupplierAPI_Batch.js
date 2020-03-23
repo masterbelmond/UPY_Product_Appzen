@@ -7,15 +7,18 @@
  * @NModuleScope SameAccount
  */
 
-define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/file', 'N/http', 'N/https', 'N/keyControl', 'N/sftp', 'N/task', './Appzen_Integration_library.js'],
+define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/file', 'N/http', 'N/https', 'N/keyControl', 'N/sftp', 'N/task', 'N/format', './Appzen_Integration_library.js'],
 
-    function (record, search, log, email, runtime, error, file, http, https, keyControl, sftp, task) {
+    function (record, search, log, email, runtime, error, file, http, https, keyControl, sftp, task, format) {
 
         function execute() {
 
             try {
+
+                var now = new Date();
+
                 var IS_SERVER_FILE = true;
-                var IS_TRIGGER_FILE = true;
+                var IS_TRIGGER_FILE = false;
 
                 //region COMPANY PREFERENCES
 
@@ -456,6 +459,15 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                             'is_active': is_active,
                             'note': note,
                             'addresses': addressArr
+                        });
+
+
+                        record.submitFields({
+                            type: search.Type.VENDOR,
+                            id: internalid,
+                            values: {
+                                'custentity_appzen_last_modified': now
+                            }
                         });
 
                         log.debug({

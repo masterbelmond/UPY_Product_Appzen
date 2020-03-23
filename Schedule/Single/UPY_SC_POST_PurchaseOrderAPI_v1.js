@@ -11,6 +11,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
         function execute() {
 
             try {
+
+                var now = new Date();
+
                 var IS_SERVER_FILE = true;
                 var IS_TRIGGER_FILE = true;
 
@@ -772,6 +775,28 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 file: loadFile,
                                 replaceExisting: true
                             });
+
+                            //Update Record
+                            if(!isBlank(internalid)) {
+
+                                record.submitFields({
+                                    type: 'purchaseorder',
+                                    id: internalid,
+                                    values: {
+                                        'custbody_appzen_last_modified': now
+                                    }
+                                });
+
+                                //Generate Logs
+                                if (internalid > 0) {
+                                    var _log = {};
+                                    _log.datetime = now;
+                                    _log.record_type = '-30';
+                                    _log.transaction = internalid;
+                                    _log.document = fileId;
+                                    generateLog(record, _log)
+                                }
+                            }
                         }
 
                         return true;
