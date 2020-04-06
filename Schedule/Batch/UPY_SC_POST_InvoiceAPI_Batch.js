@@ -138,7 +138,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 var invoiceId = runTimeContext.getParameter('custscript_search_batch_invoice_id');
 
                 var searchInvoice = search.load({
-                    id: 'customsearch_upy_invoice_header_search'
+                    id: paramInvoiceSearch
                 });
 
                 if (!isBlank(invoiceId)) {
@@ -768,15 +768,19 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         lines = [];
 
                         INVOICE_ARR.push(invoiceArr[0]);
+                        try {
+                            if (!isBlank(recordType)) {
+                                record.submitFields({
+                                    type: recordType,
+                                    id: internalid,
+                                    values: {
+                                        'custbody_appzen_last_modified': now
+                                    }
+                                });
+                            }
+                        }
+                        catch(ex){
 
-                        if(!isBlank(recordType)) {
-                            record.submitFields({
-                                type: recordType,
-                                id: internalid,
-                                values: {
-                                    'custbody_appzen_last_modified': now
-                                }
-                            });
                         }
 
                         if (COUNT < paramAppzenBatch_Limit) {

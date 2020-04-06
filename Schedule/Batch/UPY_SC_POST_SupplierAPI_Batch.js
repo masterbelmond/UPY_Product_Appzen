@@ -18,7 +18,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 var now = new Date();
 
                 var IS_SERVER_FILE = true;
-                var IS_TRIGGER_FILE = false;
+                var IS_TRIGGER_FILE = true;
 
                 //region COMPANY PREFERENCES
 

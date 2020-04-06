@@ -132,7 +132,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 var purchaseOrderId = runTimeContext.getParameter('custscript_search_batch_purch_ord_id');
 
                 var searchInvoice = search.load({
-                    id: 'customsearch_upy_purchord_header_search'
+                    id: paramPurchaseOrderSearch
                 });
 
                 if (!isBlank(purchaseOrderId)) {
@@ -757,6 +757,8 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         lines = [];
 
                         PURCHASE_ORDER_ARR.push(purchaseOrderArr[0]);
+
+                        var recordType = 'purchaseorder';
 
                         if(!isBlank(internalid)) {
                             record.submitFields({
