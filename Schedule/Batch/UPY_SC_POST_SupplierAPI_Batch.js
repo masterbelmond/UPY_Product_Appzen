@@ -412,7 +412,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                             var address_type = '';
                             if (isdefaultbilling) {
-                                address_type = 'REMIT_TO';
+                                address_type = 'BILL_TO';
                             } else {
                                 address_type = 'OFFICE';
                             }

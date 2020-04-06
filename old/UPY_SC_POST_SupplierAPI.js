@@ -395,66 +395,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             });
             //endregion Create Trigger File
 
-            //region REGROUP
-
-            //endregion REGROUP
-
-            //postData.suppliers = _data;
-
-            //endregion POST DATA
-
-            //region FILE
-
-            /**
-             if(!isBlank(postData)) {
-
-                var supplierCount = postData.suppliers.length;
-
-                for(var i in postData.suppliers){
-
-                    var _temp = [];
-                    var _data = {};
-                    var supplier = postData.suppliers[i];
-                    _temp.push(supplier);
-                    var fileName = supplier.external_supplier_id  + '_' + TIMESTAMP + '.json';
-                    _data.suppliers = _temp;
-                    var fileId = createFile(file, fileName, JSON.stringify(_data), paramAppzenSFTP_integration_folder);
-
-                    var loadFile = file.load({
-                        id : fileId
-                    });
-
-                    myConn.upload({
-                        directory: ftpRelativePath + isoDateFolder,
-                        filename: fileName,
-                        file: loadFile,
-                        replaceExisting: true
-                    });
-                }
-
-                //region Create Trigger File
-                var fileName = ISO_DATE_FOLDER + '.trigger';
-                var _data = '';
-                var fileTrigger = createFile(file, fileName, _data, paramAppzenSFTP_integration_folder);
-                var loadFile = file.load({
-                    id : fileTrigger
-                });
-
-                myConn.upload({
-                    directory: ftpRelativePath,
-                    filename: fileName,
-                    file: loadFile,
-                    replaceExisting: true
-                });
-                //endregion Create Trigger File
-
-            }
-             **/
-
-            //var contents = JSON.stringify(postData);
-
-            //endregion FILE
-
             //region Contracts
 
              var fileAttachments = getVendorAttachments(search);
@@ -478,30 +418,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
             //endregion Contracts
 
-            /*
-            var appzenResponse = https.post({
-                url : ENDPOINT,
-                body : postData
-            });
-            var code = appzenResponse.code;
-            var body = JSON.stringify(appzenResponse.body);
-            */
-
-            /*
-            if(IS_LOG_ON) {
-
-                var _log = {
-                    'datetime' : new Date(),
-                    'request' : contents,
-                    'response' : body,
-                    'url' : ENDPOINT,
-                    'code' : code,
-                    'record_type' : RECORD_TYPE_LIST.VENDOR
-                };
-
-                generateLog(record, _log);
-            }
-            */
         }
 
         function moveJSONFile(postData, myConn, ISO_DATE_FOLDER, TIMESTAMP, paramAppzenSFTP_integration_folder, ftpRelativePath, isoDateFolder){
