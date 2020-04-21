@@ -120,8 +120,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 var addressArr = [];
                 var contactArr = [];
 
-                var fileAttachments = getAttachments(search);
-
                 //region PURCHASE ORDER SEARCH
 
                 var COUNT = parseInt(1);
@@ -275,8 +273,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 total = parseFloat(total);
                             }
 
-                            var currency = result.getText({
-                                name: 'currency'
+                            var currency = result.getValue({
+                                name: 'symbol',
+                                join: 'Currency'
                             });
 
                             _total.amount = total;
@@ -321,8 +320,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         }
 
                         //total.currency_code
-                        var currency_code = result.getText({
-                            name: 'currency'
+                        var currency_code = result.getValue({
+                            name: 'symbol',
+                            join: 'Currency'
                         });
 
                         _total.amount = total;
@@ -330,13 +330,15 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                         var exchange_rate = {};
                         //exchange_rate.to_currency_code
-                        var exchange_rate_to_currency_code = result.getText({
-                            name: 'currency'
+                        var exchange_rate_to_currency_code = result.getValue({
+                            name: 'symbol',
+                            join: 'Currency'
                         });
 
                         //exchange_rate.from_currency_code
-                        var exchange_rate_from_currency_code = result.getText({
-                            name: 'currency'
+                        var exchange_rate_from_currency_code = result.getValue({
+                            name: 'symbol',
+                            join: 'Currency'
                         });
 
                         //exchange_rate.conversion_rate
@@ -395,7 +397,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         }
                         //region ATTACHMENTS
 
-
+                        var fileAttachments = getAttachments(search, internalid);
                         var attachmentsBase64 = [];
 
                         files = getTransactionAttachments(fileAttachments, internalid);
@@ -656,8 +658,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 commited_amount_amount = parseInt(0);
                             }
                             //lines.commited_amount.currency_code
-                            var commited_amountcurrency = resultLines.getText({
-                                name: 'currency'
+                            var commited_amountcurrency = resultLines.getValue({
+                                name: 'symbol',
+                                join: 'Currency'
                             });
 
                             commited_amount.amount = commited_amount_amount;
@@ -684,8 +687,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 amount_amount = parseFloat(0.00);
                             }
                             //lines.amount.currency_code
-                            var amount_currency_code = resultLines.getText({
-                                name: 'currency'
+                            var amount_currency_code = resultLines.getValue({
+                                name: 'symbol',
+                                join: 'Currency'
                             });
 
                             amount.amount = amount_amount;
@@ -709,8 +713,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                             }
 
                             //lines.unit_list_price.currency_code
-                            var base_unit_price_currency_code = resultLines.getText({
-                                name: 'currency'
+                            var base_unit_price_currency_code = resultLines.getValue({
+                                name: 'symbol',
+                                join: 'Currency'
                             });
 
                             base_unit_price.amount = base_unit_price_amount;

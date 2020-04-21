@@ -123,7 +123,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 var addressArr = [];
                 var contactArr = [];
 
-                var fileAttachments = getAttachments(search);
 
                 var runTimeContext = runtime.getCurrentScript();
                 var invoiceId = runTimeContext.getParameter('custscript_search_invoice_id');
@@ -281,8 +280,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 total = parseFloat(total);
                             }
 
-                            var currency = result.getText({
-                                name: 'currency'
+                            var currency = result.getValue({
+                                name: 'symbol',
+                                join: 'Currency'
                             });
 
                             _total.amount = total;
@@ -343,8 +343,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         }
 
                         //total.currency_code
-                        var currency_code = result.getText({
-                            name: 'currency'
+                        var currency_code = result.getValue({
+                            name: 'symbol',
+                            join: 'Currency'
                         });
 
                         _total.amount = total;
@@ -352,13 +353,15 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                         var exchange_rate = {};
                         //exchange_rate.to_currency_code
-                        var exchange_rate_to_currency_code = result.getText({
-                            name: 'currency'
+                        var exchange_rate_to_currency_code = result.getValue({
+                            name: 'symbol',
+                            join: 'Currency'
                         });
 
                         //exchange_rate.from_currency_code
-                        var exchange_rate_from_currency_code = result.getText({
-                            name: 'currency'
+                        var exchange_rate_from_currency_code = result.getValue({
+                            name: 'symbol',
+                            join: 'Currency'
                         });
 
                         //exchange_rate.conversion_rate
@@ -417,10 +420,11 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         }
                         //region ATTACHMENTS
 
-
+                        var fileAttachments = getAttachments(search, internalid);
                         var attachmentsBase64 = [];
 
                         files = getTransactionAttachments(fileAttachments, internalid);
+
                         if (!isBlank(files)) {
 
                             for (var f in files) {
@@ -433,13 +437,25 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 });
 
                                 var attachmentFileName = fileObj.name;
-
-                                myConn.upload({
-                                    directory: ftpRelativePath + isoDateFolder + '/attachments',
-                                    filename: attachmentFileName,
-                                    file: fileObj,
-                                    replaceExisting: true
+                                log.debug({
+                                    title : 'RECORD | FILENAME',
+                                    details : 'RECORD :' + internalid + '  | FILENAME: ' + attachmentFileName
                                 });
+                                attachmentFileName = attachmentFileName.trim().replace(/[\\/:*?\"<>|]/g,"").substring(0,240);
+                                try {
+                                    myConn.upload({
+                                        directory: ftpRelativePath + isoDateFolder + '/attachments',
+                                        filename: attachmentFileName,
+                                        file: fileObj,
+                                        replaceExisting: true
+                                    });
+                                }
+                                catch(ex){
+                                    log.error({
+                                        title: 'ERROR',
+                                        details: JSON.stringify(ex)
+                                    });
+                                }
                             }
                         }
 
@@ -629,20 +645,20 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 lines_item_description = resultLines.getText({
                                     name: 'expensecategory'
                                 });
-                                lines_quantity = parseInt(1);
+                                lines_quantity = parseFloat(1);
                             }
 
                             if (isBlank(lines_item_description)) {
                                 lines_item_description = resultLines.getText({
                                     name: 'account'
                                 });
-                                lines_quantity = parseInt(1);
+                                lines_quantity = parseFloat(1);
                             }
 
                             if (!isBlank(lines_quantity)) {
-                                lines_quantity = parseInt(lines_quantity);
+                                lines_quantity = parseFloat(lines_quantity);
                             } else {
-                                lines_quantity = parseInt(0);
+                                lines_quantity = parseFloat(0);
                             }
 
                             //lines.unit_of_measure
@@ -670,8 +686,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                             }
 
                             //lines.unit_list_price.currency_code
-                            var lines_unit_price_currency_code = resultLines.getText({
-                                name: 'currency'
+                            var lines_unit_price_currency_code = resultLines.getValue({
+                                name: 'symbol',
+                                join: 'Currency'
                             });
 
                             lines_unit_price.amount = lines_unit_price_amount;
@@ -695,8 +712,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                             }
 
                             //lines.unit_list_price.currency_code
-                            var lines_total_price_currency_code = resultLines.getText({
-                                name: 'currency'
+                            var lines_total_price_currency_code = resultLines.getValue({
+                                name: 'symbol',
+                                join: 'Currency'
                             });
 
                             lines_total_price.amount = lines_total_price_amount;
@@ -768,6 +786,10 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         lines = [];
 
                         INVOICE_ARR.push(invoiceArr[0]);
+                        log.debug({
+                            title : 'INVOICE',
+                            details : JSON.stringify(invoiceArr[0])
+                        });
                         try {
                             if (!isBlank(recordType)) {
                                 record.submitFields({
@@ -775,12 +797,19 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                     id: internalid,
                                     values: {
                                         'custbody_appzen_last_modified': now
+                                    },
+                                    options: {
+                                        enableSourcing: false,
+                                        ignoreMandatoryFields: true
                                     }
                                 });
                             }
                         }
                         catch(ex){
-
+                            log.error({
+                                title: 'ERROR',
+                                details: JSON.stringify(ex)
+                            });
                         }
 
                         if (COUNT < paramAppzenBatch_Limit) {
@@ -799,18 +828,30 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 if (IS_SERVER_FILE) {
 
                     var fileName = INTERNAL_ID + '_' + TIMESTAMP + '.json';
-                    var fileId = createFile(file, fileName, JSON.stringify(postData), paramAppzenSFTP_integration_folder);
-
-                    var loadFile = file.load({
-                        id: fileId
+                    log.debug({
+                        title : 'FILENAME',
+                        details : 'DETAILS: ' + fileName
                     });
+                    try {
+                        var fileId = createFile(file, fileName, JSON.stringify(postData), paramAppzenSFTP_integration_folder);
 
-                    myConn.upload({
-                        directory: ftpRelativePath + isoDateFolder,
-                        filename: fileName,
-                        file: loadFile,
-                        replaceExisting: true
-                    });
+                        var loadFile = file.load({
+                            id: fileId
+                        });
+
+                        myConn.upload({
+                            directory: ftpRelativePath + isoDateFolder,
+                            filename: fileName,
+                            file: loadFile,
+                            replaceExisting: true
+                        });
+                    }
+                    catch(ex){
+                        log.error({
+                            title: 'ERROR',
+                            details: JSON.stringify(ex)
+                        });
+                    }
                 }
 
                 if (IS_TRIGGER_FILE) {
@@ -836,7 +877,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             catch(ex){
                 log.error({
                     title: 'ERROR',
-                    details: 'Error Code: ' + ex.getCode() + ' | Error Details: ' + ex.getDetails()
+                    details: JSON.stringify(ex)
                 });
             }
 

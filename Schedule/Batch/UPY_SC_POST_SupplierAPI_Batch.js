@@ -20,6 +20,8 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 var IS_SERVER_FILE = true;
                 var IS_TRIGGER_FILE = true;
 
+                var HAS_ATTACHMENTS = false;
+
                 //region COMPANY PREFERENCES
 
                 var scriptObj = runtime.getCurrentScript();
@@ -116,6 +118,14 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     myConn.makeDirectory({
                         path: ftpRelativePath + isoDateFolder
                     });
+
+                    myConn.makeDirectory({
+                        path: paramAppzenSFTP_dir + paramAppzenSFTP_contracts_folder + isoDateFolder
+                    });
+
+                    myConn.makeDirectory({
+                        path: paramAppzenSFTP_dir + paramAppzenSFTP_contracts_folder + isoDateFolder + '/attachments'
+                    });
                 }
 
                 //endregion Create SFTP Directories
@@ -150,23 +160,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                     });
                 }
 
-                //region Contracts
-                var fileAttachments = getVendorAttachments(search, supplierId);
-                if (!isBlank(fileAttachments)) {
-                    for (var f in fileAttachments) {
-                        var fileObj = file.load({
-                            id: fileAttachments[f].fileId
-                        });
-                        var fileName = fileObj.name;
-                        myConn.upload({
-                            directory: paramAppzenSFTP_dir + paramAppzenSFTP_contracts_folder,
-                            filename: fileName,
-                            file: fileObj,
-                            replaceExisting: true
-                        });
-                    }
-                }
-                //endregion Contracts
 
                 searchSupplier.run().each(function (result) {
 
@@ -414,7 +407,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                             if (isdefaultbilling) {
                                 address_type = 'BILL_TO';
                             } else {
-                                address_type = 'OFFICE';
+                                address_type = 'REMIT_TO'; //changed "OFFICE" to "REMIT_TO"
                             }
 
                             if (!isBlank(contactArr)) {
@@ -443,10 +436,40 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                     'phone': phone
                                 });
                             }
+
                             return true;
                         });
 
                         //endregion ADDRESS SEARCH
+
+                        //region Contracts
+                        var fileAttachments = getVendorAttachments(search, internalid);
+                        log.debug({
+                            title : 'File Attachments',
+                            details : JSON.stringify(fileAttachments)
+                        });
+                        if (!isBlank(fileAttachments)) {
+
+                            HAS_ATTACHMENTS = true;
+
+                            for (var f in fileAttachments) {
+
+                                var fileObj = file.load({
+                                    id: fileAttachments[f].fileId
+                                });
+                                var fileName = fileObj.name;
+                                fileName = fileName.trim().replace(/[\\/:*?\"<>|]/g,"").substring(0,240);
+
+                                myConn.upload({
+                                    directory: paramAppzenSFTP_dir + paramAppzenSFTP_contracts_folder + isoDateFolder + '/attachments',
+                                    filename: fileName,
+                                    file: fileObj,
+                                    replaceExisting: true
+                                });
+                            }
+                        }
+                        fileAttachments = [];
+                        //endregion Contracts
 
                         supplier.push({
                             'external_supplier_id': internalid,
@@ -461,19 +484,27 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                             'addresses': addressArr
                         });
 
+                        try {
+                            record.submitFields({
+                                type: search.Type.VENDOR,
+                                id: internalid,
+                                values: {
+                                    'custentity_appzen_last_modified': now
+                                }
+                            });
 
-                        record.submitFields({
-                            type: search.Type.VENDOR,
-                            id: internalid,
-                            values: {
-                                'custentity_appzen_last_modified': now
-                            }
-                        });
+                            log.debug({
+                                title: 'supplier',
+                                details: JSON.stringify(supplier)
+                            });
+                        }
+                        catch(ex){
+                            log.error({
+                                title: 'ERROR',
+                                details: JSON.stringify(ex)
+                            });
 
-                        log.debug({
-                            title: 'supplier',
-                            details: JSON.stringify(supplier)
-                        });
+                        }
 
                         if (COUNT < paramAppzenBatch_Limit) {
                             SUPPLIERS_ARR.push(supplier[0]);
@@ -499,18 +530,31 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 if (IS_SERVER_FILE) {
 
                     var fileName = INTERNAL_ID + '_' + TIMESTAMP + '.json';
-                    var fileId = createFile(file, fileName, JSON.stringify(postData), paramAppzenSFTP_integration_folder);
-
-                    var loadFile = file.load({
-                        id: fileId
+                    log.debug({
+                        title : 'FILENAME',
+                        details : 'DETAILS: ' + fileName
                     });
+                    try {
 
-                    myConn.upload({
-                        directory: ftpRelativePath + isoDateFolder,
-                        filename: fileName,
-                        file: loadFile,
-                        replaceExisting: true
-                    });
+                        var fileId = createFile(file, fileName, JSON.stringify(postData), paramAppzenSFTP_integration_folder);
+                        var loadFile = file.load({
+                            id: fileId
+                        });
+
+                        myConn.upload({
+                            directory: ftpRelativePath + isoDateFolder,
+                            filename: fileName,
+                            file: loadFile,
+                            replaceExisting: true
+                        });
+                    }
+                    catch(ex){
+                        log.error({
+                            title: 'ERROR',
+                            details: JSON.stringify(ex)
+                        });
+
+                    }
                 }
 
                 //endregion SUPPLIER SEARCH
@@ -519,27 +563,52 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                     //region Create Trigger File
                     var fileName = ISO_DATE_FOLDER + '.trigger';
-                    var _data = '';
-                    var fileTrigger = createFile(file, fileName, _data, paramAppzenSFTP_integration_folder);
-                    var loadFile = file.load({
-                        id: fileTrigger
+
+                    log.debug({
+                        title : 'FILE TRIGGER',
+                        details : 'DETAILS: ' + fileName
                     });
 
-                    myConn.upload({
-                        directory: ftpRelativePath,
-                        filename: fileName,
-                        file: loadFile,
-                        replaceExisting: true
-                    });
-                    //endregion Create Trigger File
+                    try {
+                        var _data = '';
+                        var fileTrigger = createFile(file, fileName, _data, paramAppzenSFTP_integration_folder);
+                        var loadFile = file.load({
+                            id: fileTrigger
+                        });
+
+                        myConn.upload({
+                            directory: ftpRelativePath,
+                            filename: fileName,
+                            file: loadFile,
+                            replaceExisting: true
+                        });
+
+                        if (HAS_ATTACHMENTS) {
+                            myConn.upload({
+                                directory: paramAppzenSFTP_dir + paramAppzenSFTP_contracts_folder,
+                                filename: fileName,
+                                file: loadFile,
+                                replaceExisting: true
+                            });
+                        }
+                        //endregion Create Trigger File
+                    }
+                    catch(ex){
+                        log.error({
+                            title: 'ERROR',
+                            details: JSON.stringify(ex)
+                        });
+
+                    }
                 }
 
             }
             catch(ex){
                 log.error({
                     title: 'ERROR',
-                    details: 'Error Code: ' + ex.getCode() + ' | Error Details: ' + ex.getDetails()
+                    details: JSON.stringify(ex)
                 });
+
             }
 
         }

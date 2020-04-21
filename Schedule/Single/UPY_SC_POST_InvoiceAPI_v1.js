@@ -123,8 +123,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 var addressArr = [];
                 var contactArr = [];
 
-                var fileAttachments = getAttachments(search);
-
                 var runTimeContext = runtime.getCurrentScript();
                 var invoiceId = runTimeContext.getParameter('custscript_search_invoice_id');
 
@@ -281,8 +279,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 total = parseFloat(total);
                             }
 
-                            var currency = result.getText({
-                                name: 'currency'
+                            var currency = result.getValue({
+                                name: 'symbol',
+                                join: 'Currency'
                             });
 
                             _total.amount = total;
@@ -342,8 +341,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         }
 
                         //total.currency_code
-                        var currency_code = result.getText({
-                            name: 'currency'
+                        var currency_code = result.getValue({
+                            name: 'symbol',
+                            join: 'Currency'
                         });
 
                         _total.amount = total;
@@ -351,13 +351,15 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                         var exchange_rate = {};
                         //exchange_rate.to_currency_code
-                        var exchange_rate_to_currency_code = result.getText({
-                            name: 'currency'
+                        var exchange_rate_to_currency_code = result.getValue({
+                            name: 'symbol',
+                            join: 'Currency'
                         });
 
                         //exchange_rate.from_currency_code
-                        var exchange_rate_from_currency_code = result.getText({
-                            name: 'currency'
+                        var exchange_rate_from_currency_code = result.getValue({
+                            name: 'symbol',
+                            join: 'Currency'
                         });
 
                         //exchange_rate.conversion_rate
@@ -417,9 +419,13 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         //region ATTACHMENTS
 
 
+
+
+                        var fileAttachments = getAttachments(search, internalid);
                         var attachmentsBase64 = [];
 
                         files = getTransactionAttachments(fileAttachments, internalid);
+
                         if (!isBlank(files)) {
 
                             for (var f in files) {
@@ -669,8 +675,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                             }
 
                             //lines.unit_list_price.currency_code
-                            var lines_unit_price_currency_code = resultLines.getText({
-                                name: 'currency'
+                            var lines_unit_price_currency_code = resultLines.getValue({
+                                name: 'symbol',
+                                join: 'Currency'
                             });
 
                             lines_unit_price.amount = lines_unit_price_amount;
@@ -694,8 +701,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                             }
 
                             //lines.unit_list_price.currency_code
-                            var lines_total_price_currency_code = resultLines.getText({
-                                name: 'currency'
+                            var lines_total_price_currency_code = resultLines.getValue({
+                                name: 'symbol',
+                                join: 'Currency'
                             });
 
                             lines_total_price.amount = lines_total_price_amount;

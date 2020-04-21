@@ -120,7 +120,7 @@ function getAttachmentsById(search, id) {
     return fileArr;
 }
 
-function getAttachments(search) {
+function getAttachments(search, internalid) {
 
     var fileArr = [];
 
@@ -130,7 +130,9 @@ function getAttachments(search) {
             [
                 ['type','anyof','VendBill','VendCred','PurchOrd'],
                 'AND',
-                ['file.internalid','noneof','@NONE@']
+                ['file.internalid','noneof','@NONE@'],
+                'AND',
+                ['internalid','anyof', internalid]
             ],
         columns:
             [
@@ -192,7 +194,9 @@ function getVendorAttachments(search, supplierId){
         type: 'vendor',
         filters:
             [
-                ['file.internalid','noneof','@NONE@']
+                ['file.internalid','noneof','@NONE@'],
+                'AND',
+                [['internalid','anyof', supplierId]]
             ],
         columns:
             [
@@ -209,16 +213,17 @@ function getVendorAttachments(search, supplierId){
                 })
             ]
     });
-
+    /*
     if (!isBlank(supplierId)) {
         var internalIdFilter = search.createFilter({
             name: 'internalidnumber',
-            operator: 'greaterthan',
+            operator: 'anyof',
             values: supplierId
         });
 
         vendorSearchObj.filters.push(internalIdFilter);
     }
+    */
 
     vendorSearchObj.run().each(function(result){
 

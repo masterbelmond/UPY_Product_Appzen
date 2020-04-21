@@ -20,6 +20,8 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 var IS_SERVER_FILE = true;
                 var IS_TRIGGER_FILE = true;
 
+                var HAS_ATTACHMENTS = false;
+
                 //region COMPANY PREFERENCES
 
                 var scriptObj = runtime.getCurrentScript();
@@ -148,24 +150,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         details: 'SUPPLIER FILTER: ' + supplierId
                     });
                 }
-
-                //region Contracts
-                var fileAttachments = getVendorAttachments(search, supplierId);
-                if (!isBlank(fileAttachments)) {
-                    for (var f in fileAttachments) {
-                        var fileObj = file.load({
-                            id: fileAttachments[f].fileId
-                        });
-                        var fileName = fileObj.name;
-                        myConn.upload({
-                            directory: paramAppzenSFTP_dir + paramAppzenSFTP_contracts_folder,
-                            filename: fileName,
-                            file: fileObj,
-                            replaceExisting: true
-                        });
-                    }
-                }
-                //endregion Contracts
 
                 searchSupplier.run().each(function (result) {
 
@@ -444,10 +428,38 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                     'phone': phone
                                 });
                             }
+
                             return true;
                         });
 
                         //endregion ADDRESS SEARCH
+
+                        //region Contracts
+                        var fileAttachments = getVendorAttachments(search, internalid);
+                        log.debug({
+                            title : 'ATTACHMENT: getVendorAttachments',
+                            details : 'File: ' + JSON.stringify(fileAttachments)
+                        });
+
+                        if (!isBlank(fileAttachments)) {
+
+                            HAS_ATTACHMENTS = true;
+
+                            for (var f in fileAttachments) {
+                                var fileObj = file.load({
+                                    id: fileAttachments[f].fileId
+                                });
+                                var fileName = fileObj.name;
+                                myConn.upload({
+                                    directory: paramAppzenSFTP_dir + paramAppzenSFTP_contracts_folder + isoDateFolder + '/attachments',
+                                    filename: fileName,
+                                    file: fileObj,
+                                    replaceExisting: true
+                                });
+                            }
+                        }
+                        fileAttachments = [];
+                        //endregion Contracts
 
                         supplier.push({
                             'external_supplier_id': internalid,
@@ -537,6 +549,15 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         file: loadFile,
                         replaceExisting: true
                     });
+
+                    if(HAS_ATTACHMENTS) {
+                        myConn.upload({
+                            directory: paramAppzenSFTP_dir + paramAppzenSFTP_contracts_folder,
+                            filename: fileName,
+                            file: loadFile,
+                            replaceExisting: true
+                        });
+                    }
                     //endregion Create Trigger File
                 }
 

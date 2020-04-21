@@ -120,8 +120,6 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 var addressArr = [];
                 var contactArr = [];
 
-                var fileAttachments = getAttachments(search);
-
                 //region INVOICE SEARCH
 
                 var PURCHASE_ORDER_ARR = [];
@@ -275,8 +273,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 total = parseFloat(total);
                             }
 
-                            var currency = result.getText({
-                                name: 'currency'
+                            var currency = result.getValue({
+                                name: 'symbol',
+                                join: 'Currency'
                             });
 
                             _total.amount = total;
@@ -321,8 +320,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         }
 
                         //total.currency_code
-                        var currency_code = result.getText({
-                            name: 'currency'
+                        var currency_code = result.getValue({
+                            name: 'symbol',
+                            join: 'Currency'
                         });
 
                         _total.amount = total;
@@ -330,13 +330,15 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
 
                         var exchange_rate = {};
                         //exchange_rate.to_currency_code
-                        var exchange_rate_to_currency_code = result.getText({
-                            name: 'currency'
+                        var exchange_rate_to_currency_code = result.getValue({
+                            name: 'symbol',
+                            join: 'Currency'
                         });
 
                         //exchange_rate.from_currency_code
-                        var exchange_rate_from_currency_code = result.getText({
-                            name: 'currency'
+                        var exchange_rate_from_currency_code = result.getValue({
+                            name: 'symbol',
+                            join: 'Currency'
                         });
 
                         //exchange_rate.conversion_rate
@@ -395,13 +397,15 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         }
                         //region ATTACHMENTS
 
-
+                        var fileAttachments = getAttachments(search, internalid);
                         var attachmentsBase64 = [];
+
 
                         files = getTransactionAttachments(fileAttachments, internalid);
                         if (!isBlank(files)) {
 
                             for (var f in files) {
+
                                 var fileObj = file.load({
                                     id: files[f]
                                 });
@@ -411,13 +415,25 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 });
 
                                 var attachmentFileName = fileObj.name;
-
-                                myConn.upload({
-                                    directory: ftpRelativePath + isoDateFolder + '/attachments',
-                                    filename: attachmentFileName,
-                                    file: fileObj,
-                                    replaceExisting: true
+                                log.debug({
+                                    title : 'RECORD | FILENAME',
+                                    details : 'RECORD :' + internalid + '  | FILENAME: ' + attachmentFileName
                                 });
+                                attachmentFileName = attachmentFileName.trim().replace(/[\\/:*?\"<>|]/g,"").substring(0,240);
+                                try {
+                                    myConn.upload({
+                                        directory: ftpRelativePath + isoDateFolder + '/attachments',
+                                        filename: attachmentFileName,
+                                        file: fileObj,
+                                        replaceExisting: true
+                                    });
+                                }
+                                catch(ex){
+                                    log.error({
+                                        title: 'ERROR',
+                                        details: JSON.stringify(ex)
+                                    });
+                                }
                             }
                         }
 
@@ -656,8 +672,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 commited_amount_amount = parseInt(0);
                             }
                             //lines.commited_amount.currency_code
-                            var commited_amountcurrency = resultLines.getText({
-                                name: 'currency'
+                            var commited_amountcurrency = resultLines.getValue({
+                                name: 'symbol',
+                                join: 'Currency'
                             });
 
                             commited_amount.amount = commited_amount_amount;
@@ -684,8 +701,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                                 amount_amount = parseFloat(0.00);
                             }
                             //lines.amount.currency_code
-                            var amount_currency_code = resultLines.getText({
-                                name: 'currency'
+                            var amount_currency_code = resultLines.getValue({
+                                name: 'symbol',
+                                join: 'Currency'
                             });
 
                             amount.amount = amount_amount;
@@ -709,8 +727,9 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                             }
 
                             //lines.unit_list_price.currency_code
-                            var base_unit_price_currency_code = resultLines.getText({
-                                name: 'currency'
+                            var base_unit_price_currency_code = resultLines.getValue({
+                                name: 'symbol',
+                                join: 'Currency'
                             });
 
                             base_unit_price.amount = base_unit_price_amount;
@@ -757,17 +776,29 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                         lines = [];
 
                         PURCHASE_ORDER_ARR.push(purchaseOrderArr[0]);
+                        log.debug({
+                            title: 'PURCHASE ORDER',
+                            details: JSON.stringify(purchaseOrderArr[0])
+                        });
 
                         var recordType = 'purchaseorder';
 
                         if(!isBlank(internalid)) {
-                            record.submitFields({
-                                type: recordType,
-                                id: internalid,
-                                values: {
-                                    'custbody_appzen_last_modified': now
-                                }
-                            });
+                            try {
+                                record.submitFields({
+                                    type: recordType,
+                                    id: internalid,
+                                    values: {
+                                        'custbody_appzen_last_modified': now
+                                    }
+                                });
+                            }
+                            catch(ex){
+                                log.error({
+                                    title: 'ERROR',
+                                    details: JSON.stringify(ex)
+                                });
+                            }
                         }
 
                         if (COUNT < paramAppzenBatch_Limit) {
@@ -790,18 +821,30 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
                 if (IS_SERVER_FILE) {
 
                     var fileName = INTERNAL_ID + '_' + TIMESTAMP + '.json';
-                    var fileId = createFile(file, fileName, JSON.stringify(postData), paramAppzenSFTP_integration_folder);
-
-                    var loadFile = file.load({
-                        id: fileId
+                    log.debug({
+                        title : 'FILENAME',
+                        details : 'DETAILS: ' + fileName
                     });
+                    try {
+                        var fileId = createFile(file, fileName, JSON.stringify(postData), paramAppzenSFTP_integration_folder);
 
-                    myConn.upload({
-                        directory: ftpRelativePath + isoDateFolder,
-                        filename: fileName,
-                        file: loadFile,
-                        replaceExisting: true
-                    });
+                        var loadFile = file.load({
+                            id: fileId
+                        });
+
+                        myConn.upload({
+                            directory: ftpRelativePath + isoDateFolder,
+                            filename: fileName,
+                            file: loadFile,
+                            replaceExisting: true
+                        });
+                    }
+                    catch(ex){
+                        log.error({
+                            title: 'ERROR',
+                            details: JSON.stringify(ex)
+                        });
+                    }
                 }
 
                 if (IS_TRIGGER_FILE) {
@@ -826,7 +869,7 @@ define(['N/record', 'N/search', 'N/log', 'N/email', 'N/runtime', 'N/error','N/fi
             catch(ex){
                 log.error({
                     title: 'ERROR',
-                    details: 'Error Code: ' + ex.getCode() + ' | Error Details: ' + ex.getDetails()
+                    details: JSON.stringify(ex)
                 });
             }
 
